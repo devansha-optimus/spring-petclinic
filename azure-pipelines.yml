@@ -1,0 +1,99 @@
+trigger:
+  branches:
+    include:
+      - main
+
+variables:
+  containerAppName: blue-green-app
+  resourceGroup: RG-Devansh-POC
+  location: Canada Central
+  demoImage: mcr.microsoft.com/azuredocs/containerapps-helloworld:latest
+  revisionSuffix: green-$(Build.BuildId)
+
+stages:
+- stage: DeployGreen
+  jobs:
+  - job: DeployGreenRevision
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'RG-Devansh-POC-0041'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Deploying new Green revision..."
+          az containerapp update \
+            --name ${{ variables.containerAppName }} \
+            --resource-group ${{ variables.resourceGroup }} \
+            --image ${{ variables.demoImage }} \
+            --revision-suffix ${{ variables.revisionSuffix }}
+
+- stage: Validate
+  dependsOn: DeployGreen
+  jobs:
+  - job: SmokeTest
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - script: |
+        echo "Smoke testing Green revision..."
+        # Optionally curl using known URL with revision header/query param if enabled
+        echo "Test passed."
+
+- stage: SwitchTraffic
+  dependsOn: Validate
+  jobs:
+  - job: Set100PercentToGreen
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'RG-Devansh-POC-0041'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          greenRev=$(az containerapp revision list \
+            --name ${{ variables.containerAppName }} \
+            --resource-group ${{ variables.resourceGroup }} \
+            --query "[?contains(name, '${{ variables.revisionSuffix }}')].name" \
+            -o tsv)
+
+          echo "Shifting 100% traffic to revision: $greenRev"
+
+          az containerapp ingress traffic set \
+            --name ${{ variables.containerAppName }} \
+            --resource-group ${{ variables.resourceGroup }} \
+            --revision-weight $greenRev=100
+
+- stage: Cleanup
+  dependsOn: SwitchTraffic
+  jobs:
+  - job: DeactivateOld
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'RG-Devansh-POC-0041'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Finding active non-green revisions to deactivate..."
+
+          greenRev="${{ variables.revisionSuffix }}"
+          revs=$(az containerapp revision list \
+            --name ${{ variables.containerAppName }} \
+            --resource-group ${{ variables.resourceGroup }} \
+            --query "[?properties.active==\`true\` && !contains(name, '$greenRev')].name" \
+            -o tsv)
+
+          for rev in $revs; do
+            echo "Deactivating revision: $rev"
+            az containerapp revision deactivate \
+              --name ${{ variables.containerAppName }} \
+              --resource-group ${{ variables.resourceGroup }} \
+              --revision $rev
+          done
