@@ -69,10 +69,10 @@ stages:
             --resource-group ${{ variables.resourceGroup }} \
             --revision-weight $greenRev=100
 
-- stage: Deleting
+- stage: Cleanup
   dependsOn: SwitchTraffic
   jobs:
-  - job: DeactivateOld
+  - job: CleanupRevisions
     pool:
       vmImage: 'ubuntu-latest'
     steps:
@@ -82,15 +82,30 @@ stages:
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
-          echo "Finding active non-green revisions to deactivate..."
+          echo "Fetching revisions with traffic..."
+          activeRev=$(az containerapp show \
+            --name ${{ variables.containerAppName }} \
+            --resource-group ${{ variables.resourceGroup }} \
+            --query "properties.configuration.ingress.traffic[?weight > \`0\`].revisionName" \
+            -o tsv)
 
-          greenRev="${{ variables.revisionSuffix }}"
-          revs=$(az containerapp revision list --name ${{ variables.containerAppName }} --resource-group ${{ variables.resourceGroup }} --query "[?properties.active==\`true\` && !contains(name, '$greenRev')].name" -o tsv)
+          echo "Active revision with traffic: $activeRev"
 
-          for rev in $revs; do
-            echo "Deactivating revision: $rev"
-            az containerapp revision deactivate \
-              --name ${{ variables.containerAppName }} \
-              --resource-group ${{ variables.resourceGroup }} \
-              --revision $rev
+          echo "Listing all revisions..."
+          allRevs=$(az containerapp revision list \
+            --name ${{ variables.containerAppName }} \
+            --resource-group ${{ variables.resourceGroup }} \
+            --query "[].name" \
+            -o tsv)
+
+          for rev in $allRevs; do
+            if [ "$rev" != "$activeRev" ]; then
+              echo "Deleting old revision: $rev"
+              az containerapp revision deactivate \
+                --name ${{ variables.containerAppName }} \
+                --resource-group ${{ variables.resourceGroup }} \
+                --revision $rev
+            else
+              echo "Skipping active revision: $rev"
+            fi
           done
