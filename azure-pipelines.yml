@@ -7,7 +7,7 @@ variables:
   containerAppName: blue-green-app
   resourceGroup: RG-Devansh-POC
   location: Canada Central
-  demoImage: mcr.microsoft.com/azuredocs/containerapps-helloworld:latest
+  demoImage: azurespringapp.azurecr.io/bluegreen/page2:latest
   revisionSuffix: green-$(Build.BuildId)
   azureSub: RG-Devansh-POC-0041
 
