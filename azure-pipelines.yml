@@ -30,11 +30,11 @@ stages:
             --resource-group ${{ variables.resourceGroup }} \
             --image ${{ variables.demoImage }} \
             --revision-suffix ${{ variables.revisionSuffix }}
-           az containerapp revision label add \
-                  --name $(containerAppName) \
-                  --resource-group $(resourceGroup) \
-                  --revision ${{ variables.containerAppName }}--${{ variables.revisionSuffix }} \
-                  --label green
+          #  az containerapp revision label add \
+          #         --name $(containerAppName) \
+          #         --resource-group $(resourceGroup) \
+          #         --revision ${{ variables.containerAppName }}--${{ variables.revisionSuffix }} \
+          #         --label green
       
 
 - stage: Validate
