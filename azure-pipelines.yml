@@ -33,7 +33,7 @@ stages:
            az containerapp revision label add \
                   --name $(containerAppName) \
                   --resource-group $(resourceGroup) \
-                  --revision ${{ variables.containerAppName }}-$(Build.BuildId) \
+                  --revision ${{ variables.containerAppName }}--${{ variables.revisionSuffix }} \
                   --label green
       
 
