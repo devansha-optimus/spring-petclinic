@@ -9,6 +9,7 @@ variables:
   location: Canada Central
   demoImage: mcr.microsoft.com/azuredocs/containerapps-helloworld:latest
   revisionSuffix: green-$(Build.BuildId)
+  azureSub: RG-Devansh-POC-0041
 
 stages:
 - stage: DeployGreen
@@ -19,7 +20,7 @@ stages:
     steps:
     - task: AzureCLI@2
       inputs:
-        azureSubscription: 'RG-Devansh-POC-0041'
+        azureSubscription: ${{ variables.azureSub }}
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
@@ -51,7 +52,7 @@ stages:
     steps:
     - task: AzureCLI@2
       inputs:
-        azureSubscription: 'RG-Devansh-POC-0041'
+        azureSubscription: ${{ variables.azureSub }}
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
@@ -68,7 +69,7 @@ stages:
             --resource-group ${{ variables.resourceGroup }} \
             --revision-weight $greenRev=100
 
-- stage: Cleanup
+- stage: Deleting
   dependsOn: SwitchTraffic
   jobs:
   - job: DeactivateOld
@@ -77,18 +78,14 @@ stages:
     steps:
     - task: AzureCLI@2
       inputs:
-        azureSubscription: 'RG-Devansh-POC-0041'
+        azureSubscription: ${{ variables.azureSub }}
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
           echo "Finding active non-green revisions to deactivate..."
 
           greenRev="${{ variables.revisionSuffix }}"
-          revs=$(az containerapp revision list \
-            --name ${{ variables.containerAppName }} \
-            --resource-group ${{ variables.resourceGroup }} \
-            --query "[?properties.active==\`true\` && !contains(name, '$greenRev')].name" \
-            -o tsv)
+          revs=$(az containerapp revision list --name ${{ variables.containerAppName }} --resource-group ${{ variables.resourceGroup }} --query "[?properties.active==\`true\` && !contains(name, '$greenRev')].name" -o tsv)
 
           for rev in $revs; do
             echo "Deactivating revision: $rev"
