@@ -30,6 +30,7 @@ stages:
             --resource-group ${{ variables.resourceGroup }} \
             --image ${{ variables.demoImage }} \
             --revision-suffix ${{ variables.revisionSuffix }}
+            --label green
 
 - stage: Validate
   dependsOn: DeployGreen
