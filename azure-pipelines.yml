@@ -30,6 +30,17 @@ stages:
             --resource-group ${{ variables.resourceGroup }} \
             --image ${{ variables.demoImage }} \
             --revision-suffix ${{ variables.revisionSuffix }}
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: ${{ variables.azureSub }}
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+           az containerapp revision label add \
+                  --name $(containerAppName) \
+                  --resource-group $(resourceGroup) \
+                  --revision ${{ variables.containerAppName }}--${{ variables.revisionSuffix }} \
+                  --label green
 
 - stage: Validate
   dependsOn: DeployGreen
