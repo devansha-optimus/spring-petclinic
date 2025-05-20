@@ -18,6 +18,7 @@ stages:
       vmImage: 'ubuntu-latest'
     steps:
     - task: AzureCLI@2
+      name: DeployStep
       inputs:
         azureSubscription: $(azureSub)
         scriptType: 'bash'
@@ -55,10 +56,8 @@ stages:
             --revision $(containerAppName)--$revisionSuffix \
             --label $newLabel
 
-          echo "##vso[task.setvariable variable=newLabel]$newLabel"
-          echo "##vso[task.setvariable variable=revisionSuffix]$revisionSuffix"
-
-
+          echo "##vso[task.setvariable variable=revisionSuffix;isOutput=true]$revisionSuffix"
+          echo "##vso[task.setvariable variable=newLabel;isOutput=true]$newLabel"]
 
 
 - stage: SmokeTest
@@ -73,8 +72,11 @@ stages:
         # Add curl or integration checks here
         echo "Smoke tests passed."
 
+
 - stage: Route100Percent
-  dependsOn: SmokeTest
+  dependsOn: DeployRevision
+  variables:
+    revisionSuffix: $[ stageDependencies.DeployRevision.DeployNewRevision.outputs['revisionSuffix'] ]
   jobs:
   - job: FinalShift
     pool:
@@ -86,10 +88,12 @@ stages:
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
+          echo "Using revisionSuffix: $(revisionSuffix)"
+
           newRev=$(az containerapp revision list \
             --name $(containerAppName) \
             --resource-group $(resourceGroup) \
-            --query "[?contains(name, '$(revisionSuffix)')].name" -o tsv)
+            --query "[?contains(name, '$(revisionSuffix)')].name | [0]" -o tsv)
 
           echo "Routing 100% traffic to: $newRev"
 
@@ -97,6 +101,7 @@ stages:
             --name $(containerAppName) \
             --resource-group $(resourceGroup) \
             --revision-weight $newRev=100
+
 
 - stage: Cleanup
   dependsOn: Route100Percent
