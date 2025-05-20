@@ -121,3 +121,21 @@ stages:
                 --revision $rev
             fi
           done
+- stage: GreenBlue
+  dependsOn: Cleanup
+  jobs:
+    - job: ChangingGreenToBlue
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
+      - task: AzureCLI@2
+        inputs:
+          azureSubscription: ${{ variables.azureSub }}
+          scriptType: 'bash'
+          scriptLocation: 'inlineScript'
+          inlineScript: |
+            az containerapp revision label add \
+            --name $(containerAppName) \
+            --resource-group $(resourceGroup) \
+            --revision ${{ variables.containerAppName }}--${{ variables.revisionSuffix }} \
+            --label blue
