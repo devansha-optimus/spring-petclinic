@@ -113,49 +113,55 @@ stages:
 - stage: Cleanup
   dependsOn: SwitchTraffic
   jobs:
-  - job: DeactivateUnlabeledRevisions
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: AzureCLI@2
-      inputs:
-        azureSubscription: ${{ variables.azureSub }}
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          echo "Getting revisions labeled 'green' and 'blue'..."
-
-          greenRev=$(az containerapp revision label show \
-            --name ${{ variables.containerAppName }} \
-            --resource-group ${{ variables.resourceGroup }} \
-            --label green \
-            --query "name" -o tsv)
-
-          blueRev=$(az containerapp revision label show \
-            --name ${{ variables.containerAppName }} \
-            --resource-group ${{ variables.resourceGroup }} \
-            --label blue \
-            --query "name" -o tsv)
-
-          echo "Green revision: $greenRev"
-          echo "Blue revision: $blueRev"
-
-          allRevs=$(az containerapp revision list \
-            --name ${{ variables.containerAppName }} \
-            --resource-group ${{ variables.resourceGroup }} \
-            --query "[].name" -o tsv)
-
-          for rev in $allRevs; do
-            if [[ "$rev" != "$greenRev" && "$rev" != "$blueRev" ]]; then
-              echo "Deactivating revision: $rev"
-              az containerapp revision deactivate \
+    - job: DeactivateUnlabeledRevisions
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
+        - task: AzureCLI@2
+          inputs:
+            azureSubscription: ${{ variables.azureSub }}
+            scriptType: 'bash'
+            scriptLocation: 'inlineScript'
+            inlineScript: |
+              echo "Resolving revision pointed by label 'green'..."
+              greenRev=$(az containerapp revision label show \
                 --name ${{ variables.containerAppName }} \
                 --resource-group ${{ variables.resourceGroup }} \
-                --revision $rev
-            else
-              echo "Preserving labeled revision: $rev"
-            fi
-          done
+                --label green \
+                --query "name" -o tsv 2>/dev/null)
+
+              echo "Resolving revision pointed by label 'blue'..."
+              blueRev=$(az containerapp revision label show \
+                --name ${{ variables.containerAppName }} \
+                --resource-group ${{ variables.resourceGroup }} \
+                --label blue \
+                --query "name" -o tsv 2>/dev/null)
+
+              echo "Green revision: $greenRev"
+              echo "Blue revision: $blueRev"
+
+              if [[ -z "$greenRev" && -z "$blueRev" ]]; then
+                echo "❌ No green or blue labeled revisions found. Exiting to avoid unintended cleanup."
+                exit 1
+              fi
+
+              echo "Listing all revisions..."
+              allRevs=$(az containerapp revision list \
+                --name ${{ variables.containerAppName }} \
+                --resource-group ${{ variables.resourceGroup }} \
+                --query "[].name" -o tsv)
+
+              for rev in $allRevs; do
+                if [[ "$rev" != "$greenRev" && "$rev" != "$blueRev" ]]; then
+                  echo "Deactivating revision: $rev"
+                  az containerapp revision deactivate \
+                    --name ${{ variables.containerAppName }} \
+                    --resource-group ${{ variables.resourceGroup }} \
+                    --revision $rev
+                else
+                  echo "Keeping revision with label: $rev"
+                fi
+              done
 
 - stage: GreenBlue
   dependsOn: Cleanup
