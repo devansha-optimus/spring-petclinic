@@ -59,6 +59,7 @@ stages:
           echo "##vso[task.setvariable variable=revisionSuffix]$revisionSuffix"
 
 - stage: PartialTrafficShift
+
   jobs:
     - job: Shift50PercentTrafficToNewRevision
       pool:
@@ -70,16 +71,18 @@ stages:
             scriptType: 'bash'
             scriptLocation: 'inlineScript'
             inlineScript: |
-              echo "Routing 50% traffic to new revision..."
-
               containerAppName=${{ variables.containerAppName }}
               resourceGroup=${{ variables.resourceGroup }}
-              revisionSuffix=${{ variables.revisionSuffix }}
-              newRevision="${containerAppName}-${revisionSuffix}"
+
+              echo "Getting new revision from 'green' label..."
+              newRevision=$(az containerapp revision label show \
+                --name $containerAppName \
+                --resource-group $resourceGroup \
+                --label green \
+                --query "name" -o tsv)
 
               echo "New revision: $newRevision"
 
-              # Get old revision with non-zero traffic that is not the new one
               oldRevision=$(az containerapp show \
                 --name $containerAppName \
                 --resource-group $resourceGroup \
@@ -93,6 +96,7 @@ stages:
                 exit 1
               fi
 
+              echo "Routing 50% traffic to new revision..."
               az containerapp ingress traffic set \
                 --name $containerAppName \
                 --resource-group $resourceGroup \
