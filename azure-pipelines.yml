@@ -30,24 +30,6 @@ stages:
             --resource-group ${{ variables.resourceGroup }} \
             --image ${{ variables.demoImage }} \
             --revision-suffix ${{ variables.revisionSuffix }}
-          az containerapp revision label add \
-            --name $(containerAppName) \
-            --resource-group $(resourceGroup) \
-            --revision ${{ variables.containerAppName }}--${{ variables.revisionSuffix }} \
-            --label green
-      
-    - task: AzureCLI@2
-      inputs:
-        azureSubscription: ${{ variables.azureSub }}
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          az containerapp revision label add \
-            --name $(containerAppName) \
-            --resource-group $(resourceGroup) \
-            --revision ${{ variables.containerAppName }}--${{ variables.revisionSuffix }} \
-            --label green
-      
 
 - stage: Validate
   dependsOn: DeployGreen
@@ -90,7 +72,7 @@ stages:
 - stage: Cleanup
   dependsOn: SwitchTraffic
   jobs:
-  - job: DeactivateAllExceptGreen
+  - job: DeactivateRevisionsWithoutTraffic
     pool:
       vmImage: 'ubuntu-latest'
     steps:
@@ -100,29 +82,31 @@ stages:
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
-          echo "Resolving revision pointed by label 'green'..."
-          greenRev=$(az containerapp revision label show \
+          echo "Getting revisions currently receiving traffic..."
+          activeRevs=$(az containerapp show \
             --name ${{ variables.containerAppName }} \
             --resource-group ${{ variables.resourceGroup }} \
-            --label green \
-            --query "name" -o tsv)
+            --query "properties.configuration.ingress.traffic[?weight > \`0\`].revisionName" \
+            -o tsv)
 
-          echo "Label 'green' points to: $greenRev"
+          echo "Revisions receiving traffic:"
+          echo "$activeRevs"
 
-          echo "Listing all revisions..."
+          echo "Getting all revisions..."
           allRevs=$(az containerapp revision list \
             --name ${{ variables.containerAppName }} \
             --resource-group ${{ variables.resourceGroup }} \
-            --query "[].name" -o tsv)
+            --query "[].name" \
+            -o tsv)
 
           for rev in $allRevs; do
-            if [[ "$rev" != "$greenRev" ]]; then
-              echo "Deactivating revision: $rev"
+            if echo "$activeRevs" | grep -q "$rev"; then
+              echo "Keeping revision with traffic: $rev"
+            else
+              echo "Deactivating revision without traffic: $rev"
               az containerapp revision deactivate \
                 --name ${{ variables.containerAppName }} \
                 --resource-group ${{ variables.resourceGroup }} \
                 --revision $rev
-            else
-              echo "Keeping revision with 'green' label: $rev"
             fi
           done
