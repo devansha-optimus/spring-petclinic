@@ -58,53 +58,11 @@ stages:
           echo "##vso[task.setvariable variable=newLabel]$newLabel"
           echo "##vso[task.setvariable variable=revisionSuffix]$revisionSuffix"
 
-- stage: PartialTrafficShift
 
-  jobs:
-    - job: Shift50PercentTrafficToNewRevision
-      pool:
-        vmImage: 'ubuntu-latest'
-      steps:
-        - task: AzureCLI@2
-          inputs:
-            azureSubscription: ${{ variables.azureSub }}
-            scriptType: 'bash'
-            scriptLocation: 'inlineScript'
-            inlineScript: |
-              containerAppName=${{ variables.containerAppName }}
-              resourceGroup=${{ variables.resourceGroup }}
-
-              echo "Getting new revision from 'green' label..."
-              newRevision=$(az containerapp revision label show \
-                --name $containerAppName \
-                --resource-group $resourceGroup \
-                --label green \
-                --query "name" -o tsv)
-
-              echo "New revision: $newRevision"
-
-              oldRevision=$(az containerapp show \
-                --name $containerAppName \
-                --resource-group $resourceGroup \
-                --query "properties.configuration.ingress.traffic[?revisionName != '$newRevision' && weight > \`0\`].revisionName" \
-                -o tsv)
-
-              echo "Old revision: $oldRevision"
-
-              if [[ -z "$oldRevision" || -z "$newRevision" ]]; then
-                echo "Error: One of the revisions is missing or invalid."
-                exit 1
-              fi
-
-              echo "Routing 50% traffic to new revision..."
-              az containerapp ingress traffic set \
-                --name $containerAppName \
-                --resource-group $resourceGroup \
-                --revision-weight "$oldRevision=50" "$newRevision=50"
 
 
 - stage: SmokeTest
-  dependsOn: PartialTrafficShift
+  dependsOn: DeployRevision
   jobs:
   - job: RunSmokeTests
     pool:
