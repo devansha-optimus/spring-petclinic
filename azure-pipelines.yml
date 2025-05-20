@@ -11,66 +11,57 @@ variables:
   azureSub: RG-Devansh-POC-0041
 
 stages:
-- stage: DetermineLabels
+- stage: DeployRevision
   jobs:
-  - job: DetectLabel
+  - job: DeployNewRevision
     pool:
       vmImage: 'ubuntu-latest'
     steps:
     - task: AzureCLI@2
-      name: SetRevisionLabels
       inputs:
         azureSubscription: $(azureSub)
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
-          echo "Detecting current active label..."
-          currentLabel="green"
-          newLabel="blue"
-
-          if az containerapp revision label show \
+          oldLabel=$(az containerapp revision label list \
             --name $(containerAppName) \
             --resource-group $(resourceGroup) \
-            --label blue >/dev/null 2>&1; then
-            currentLabel="blue"
+            --query "[?label=='blue' || label=='green'] | [0].label" -o tsv)
+
+          echo "Current label in use: $oldLabel"
+
+          if [ "$oldLabel" == "green" ]; then
+            newLabel="blue"
+          elif [ "$oldLabel" == "blue" ]; then
+            newLabel="green"
+          else
             newLabel="green"
           fi
 
-          echo "##vso[task.setvariable variable=currentLabel]$currentLabel"
-          echo "##vso[task.setvariable variable=newLabel]$newLabel"
+          echo "New label to deploy: $newLabel"
 
-- stage: DeployNewRevision
-  dependsOn: DetermineLabels
-  jobs:
-  - job: Deploy
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: AzureCLI@2
-      inputs:
-        azureSubscription: $(azureSub)
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          revisionName=$(containerAppName)--$(newLabel)-$(Build.BuildId)
-          echo "Deploying revision: $revisionName"
+          revisionSuffix="${newLabel}-${BUILD_BUILDID}"
+          echo "Deploying revision with suffix: $revisionSuffix"
 
           az containerapp update \
             --name $(containerAppName) \
             --resource-group $(resourceGroup) \
             --image $(demoImage) \
-            --revision-suffix $(newLabel)-$(Build.BuildId)
+            --revision-suffix $revisionSuffix
 
           az containerapp revision label add \
             --name $(containerAppName) \
             --resource-group $(resourceGroup) \
-            --revision $revisionName \
-            --label $(newLabel)
+            --revision $(containerAppName)--$revisionSuffix \
+            --label $newLabel
 
-- stage: ShiftTraffic50
-  dependsOn: DeployNewRevision
+          echo "##vso[task.setvariable variable=newLabel]$newLabel"
+          echo "##vso[task.setvariable variable=revisionSuffix]$revisionSuffix"
+
+- stage: Validate50Percent
+  dependsOn: DeployRevision
   jobs:
-  - job: TrafficHalf
+  - job: Route50Percent
     pool:
       vmImage: 'ubuntu-latest'
     steps:
@@ -80,40 +71,42 @@ stages:
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
-          oldRev=$(az containerapp revision label show \
+          echo "Routing 50% traffic to new revision..."
+
+          newRev=$(az containerapp revision list \
             --name $(containerAppName) \
             --resource-group $(resourceGroup) \
-            --label $(currentLabel) \
-            --query name -o tsv)
+            --query "[?contains(name, '$(revisionSuffix)')].name" -o tsv)
 
-          newRev=$(az containerapp revision label show \
+          oldRev=$(az containerapp show \
             --name $(containerAppName) \
             --resource-group $(resourceGroup) \
-            --label $(newLabel) \
-            --query name -o tsv)
+            --query "properties.configuration.ingress.traffic[?weight==\`100\`].revisionName" -o tsv)
 
-          echo "Splitting traffic 50/50 between $oldRev and $newRev"
+          echo "New revision: $newRev"
+          echo "Old revision: $oldRev"
 
           az containerapp ingress traffic set \
             --name $(containerAppName) \
             --resource-group $(resourceGroup) \
-            --revision-weight $oldRev=50 $newRev=50
+            --revision-weight $newRev=50 $oldRev=50
 
-- stage: Validate
-  dependsOn: ShiftTraffic50
+- stage: SmokeTest
+  dependsOn: Validate50Percent
   jobs:
-  - job: SmokeTest
+  - job: RunSmokeTests
     pool:
       vmImage: 'ubuntu-latest'
     steps:
     - script: |
-        echo "Smoke testing new revision..."
-        echo "Test passed."
+        echo "Running smoke tests..."
+        # Add curl or integration checks here
+        echo "Smoke tests passed."
 
-- stage: ShiftTraffic100
-  dependsOn: Validate
+- stage: Route100Percent
+  dependsOn: SmokeTest
   jobs:
-  - job: ShiftAll
+  - job: FinalShift
     pool:
       vmImage: 'ubuntu-latest'
     steps:
@@ -123,13 +116,12 @@ stages:
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
-          newRev=$(az containerapp revision label show \
+          newRev=$(az containerapp revision list \
             --name $(containerAppName) \
             --resource-group $(resourceGroup) \
-            --label $(newLabel) \
-            --query name -o tsv)
+            --query "[?contains(name, '$(revisionSuffix)')].name" -o tsv)
 
-          echo "Shifting 100% traffic to $newRev"
+          echo "Routing 100% traffic to: $newRev"
 
           az containerapp ingress traffic set \
             --name $(containerAppName) \
@@ -137,9 +129,9 @@ stages:
             --revision-weight $newRev=100
 
 - stage: Cleanup
-  dependsOn: ShiftTraffic100
+  dependsOn: Route100Percent
   jobs:
-  - job: DeactivateOldRevisions
+  - job: CleanupOldRevisions
     pool:
       vmImage: 'ubuntu-latest'
     steps:
@@ -149,37 +141,28 @@ stages:
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
-          echo "Getting revisions with traffic..."
-          activeRevs=$(az containerapp show \
+          echo "Fetching current active revision with traffic..."
+
+          activeRev=$(az containerapp show \
             --name $(containerAppName) \
             --resource-group $(resourceGroup) \
             --query "properties.configuration.ingress.traffic[?weight > \`0\`].revisionName" -o tsv)
 
-          echo "Getting all revisions..."
+          echo "Active revision: $activeRev"
+
           allRevs=$(az containerapp revision list \
             --name $(containerAppName) \
             --resource-group $(resourceGroup) \
             --query "[].name" -o tsv)
 
-          echo "Getting labeled revisions..."
-          greenRev=$(az containerapp revision label show \
-            --name $(containerAppName) \
-            --resource-group $(resourceGroup) \
-            --label green --query name -o tsv 2>/dev/null || echo "")
-
-          blueRev=$(az containerapp revision label show \
-            --name $(containerAppName) \
-            --resource-group $(resourceGroup) \
-            --label blue --query name -o tsv 2>/dev/null || echo "")
-
           for rev in $allRevs; do
-            if echo "$activeRevs" | grep -q "$rev" || [ "$rev" = "$greenRev" ] || [ "$rev" = "$blueRev" ]; then
-              echo "Keeping revision: $rev"
-            else
+            if [ "$rev" != "$activeRev" ]; then
               echo "Deactivating revision: $rev"
               az containerapp revision deactivate \
                 --name $(containerAppName) \
                 --resource-group $(resourceGroup) \
                 --revision $rev
+            else
+              echo "Keeping active revision: $rev"
             fi
           done
