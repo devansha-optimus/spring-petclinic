@@ -78,11 +78,10 @@ stages:
             # Example: curl -H "label: $(newLabel)" https://your-app-url
             echo "Test passed."
 
-# 3. Shift 100% Traffic
 - stage: SwitchTraffic
   dependsOn: Validate
   jobs:
-    - job: RouteAllTrafficToNew
+    - job: RouteTrafficToGreenOrBlue
       pool:
         vmImage: 'ubuntu-latest'
       steps:
@@ -92,18 +91,34 @@ stages:
             scriptType: 'bash'
             scriptLocation: 'inlineScript'
             inlineScript: |
-              newRev=$(az containerapp revision label show \
+              echo "Checking current 'blue' and 'green' revision labels..."
+
+              blueRev=$(az containerapp revision label show \
                 --name ${{ variables.containerAppName }} \
                 --resource-group ${{ variables.resourceGroup }} \
-                --label $(newLabel) \
-                --query "name" -o tsv)
+                --label blue \
+                --query "name" -o tsv || echo "")
 
-              echo "Routing 100% traffic to revision: $newRev"
+              greenRev=$(az containerapp revision label show \
+                --name ${{ variables.containerAppName }} \
+                --resource-group ${{ variables.resourceGroup }} \
+                --label green \
+                --query "name" -o tsv || echo "")
+
+              echo "🔵 Blue Revision: $blueRev"
+              echo "🟢 Green Revision: $greenRev"
+
+              if [[ -z "$greenRev" ]]; then
+                echo "❌ ERROR: Green revision label not found!"
+                exit 1
+              fi
+
+              echo "✅ Routing 100% traffic to: $greenRev"
 
               az containerapp ingress traffic set \
                 --name ${{ variables.containerAppName }} \
                 --resource-group ${{ variables.resourceGroup }} \
-                --revision-weight $newRev=100
+                --revision-weight $greenRev=100
 
 # 4. Cleanup Revisions without 'blue' or 'green' Label
 - stage: Cleanup
