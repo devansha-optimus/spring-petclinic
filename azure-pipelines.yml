@@ -58,41 +58,49 @@ stages:
           echo "##vso[task.setvariable variable=newLabel]$newLabel"
           echo "##vso[task.setvariable variable=revisionSuffix]$revisionSuffix"
 
-- stage: Validate50Percent
-  dependsOn: DeployRevision
+- stage: PartialTrafficShift
   jobs:
-  - job: Route50Percent
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: AzureCLI@2
-      inputs:
-        azureSubscription: $(azureSub)
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          echo "Routing 50% traffic to new revision..."
+    - job: Shift50PercentTrafficToNewRevision
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
+        - task: AzureCLI@2
+          inputs:
+            azureSubscription: ${{ variables.azureSub }}
+            scriptType: 'bash'
+            scriptLocation: 'inlineScript'
+            inlineScript: |
+              echo "Routing 50% traffic to new revision..."
 
-          newRev=$(az containerapp revision list \
-            --name $(containerAppName) \
-            --resource-group $(resourceGroup) \
-            --query "[?contains(name, '$(revisionSuffix)')].name" -o tsv)
+              containerAppName=${{ variables.containerAppName }}
+              resourceGroup=${{ variables.resourceGroup }}
+              revisionSuffix=${{ variables.revisionSuffix }}
+              newRevision="${containerAppName}-${revisionSuffix}"
 
-          oldRev=$(az containerapp show \
-            --name $(containerAppName) \
-            --resource-group $(resourceGroup) \
-            --query "properties.configuration.ingress.traffic[?weight==\`100\`].revisionName" -o tsv)
+              echo "New revision: $newRevision"
 
-          echo "New revision: $newRev"
-          echo "Old revision: $oldRev"
+              # Get old revision with non-zero traffic that is not the new one
+              oldRevision=$(az containerapp show \
+                --name $containerAppName \
+                --resource-group $resourceGroup \
+                --query "properties.configuration.ingress.traffic[?revisionName != '$newRevision' && weight > \`0\`].revisionName" \
+                -o tsv)
 
-          az containerapp ingress traffic set \
-            --name $(containerAppName) \
-            --resource-group $(resourceGroup) \
-            --revision-weight $newRev=50 $oldRev=50
+              echo "Old revision: $oldRevision"
+
+              if [[ -z "$oldRevision" || -z "$newRevision" ]]; then
+                echo "Error: One of the revisions is missing or invalid."
+                exit 1
+              fi
+
+              az containerapp ingress traffic set \
+                --name $containerAppName \
+                --resource-group $resourceGroup \
+                --revision-weight "$oldRevision=50" "$newRevision=50"
+
 
 - stage: SmokeTest
-  dependsOn: Validate50Percent
+  dependsOn: PartialTrafficShift
   jobs:
   - job: RunSmokeTests
     pool:
