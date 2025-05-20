@@ -105,15 +105,15 @@ stages:
                 --label green \
                 --query "name" -o tsv || echo "")
 
-              echo "🔵 Blue Revision: $blueRev"
-              echo "🟢 Green Revision: $greenRev"
+              echo "Blue Revision: $blueRev"
+              echo "Green Revision: $greenRev"
 
               if [[ -z "$greenRev" ]]; then
-                echo "❌ ERROR: Green revision label not found!"
+                echo "ERROR: Green revision label not found!"
                 exit 1
               fi
 
-              echo "✅ Routing 100% traffic to: $greenRev"
+              echo "Routing 100% traffic to: $greenRev"
 
               az containerapp ingress traffic set \
                 --name ${{ variables.containerAppName }} \
@@ -148,9 +148,9 @@ stages:
 
               for rev in $allRevs; do
                 if echo "$labeledRevs" | grep -q "^$rev$"; then
-                  echo "✅ Keeping labeled revision: $rev"
+                  echo "Keeping labeled revision: $rev"
                 else
-                  echo "🗑️ Deactivating unlabeled revision: $rev"
+                  echo "Deactivating unlabeled revision: $rev"
                   az containerapp revision deactivate \
                     --name ${{ variables.containerAppName }} \
                     --resource-group ${{ variables.resourceGroup }} \
