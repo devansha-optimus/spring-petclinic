@@ -87,3 +87,43 @@ stages:
             --resource-group ${{ variables.resourceGroup }} \
             --revision-weight $greenRev=100
 
+- stage: Cleanup
+  dependsOn: SwitchTraffic
+  condition: succeeded()
+  jobs:
+  - job: CleanupOldRevisions
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: ${{ variables.azureSub }}
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Fetching revisions labeled 'blue' or 'green'..."
+          LABELLED_REVISIONS=$(az containerapp show \
+            --name ${{ variables.containerAppName }} \
+            --resource-group ${{ variables.resourceGroup }} \
+            --query "properties.configuration.ingress.traffic[?label=='blue'||label=='green'].revisionName" \
+            -o tsv)
+
+          echo "Fetching all revisions..."
+          ALL_REVISIONS=$(az containerapp revision list \
+            --name ${{ variables.containerAppName }} \
+            --resource-group ${{ variables.resourceGroup }} \
+            --query "[].name" \
+            -o tsv)
+
+          echo "Deactivating old revisions..."
+          for REVISION in $ALL_REVISIONS; do
+            if [[ ! " $LABELLED_REVISIONS " =~ " $REVISION " ]]; then
+              echo "Deactivating: $REVISION"
+              az containerapp revision deactivate \
+                --name ${{ variables.containerAppName }} \
+                --resource-group ${{ variables.resourceGroup }} \
+                --revision "$REVISION"
+            fi
+          done
+
+          echo "Cleanup complete."
