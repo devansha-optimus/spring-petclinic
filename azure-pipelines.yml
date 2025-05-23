@@ -4,126 +4,46 @@ trigger:
       - main
 
 variables:
-  containerAppName: blue-green-app
-  resourceGroup: RG-Devansh-POC
-  location: Canada Central
-  demoImage: azurespringapp.azurecr.io/bluegreen/page2:latest
-  revisionSuffix: green-$(Build.BuildId)
-  azureSub: RG-Devansh-POC-0041
+  # ACR and image details
+  ACR_NAME: azurespringapp.azurecr.io
+  IMAGE_NAME: springboot-app
+  BUILDER: gcr.io/paketo-buildpacks/enterprise-builder
+  WAR_FILE: target/demo-3.2.0.war
+  DOCKER_REGISTRY_SERVICE_CONNECTION: RG-Devansh-POC-0041
 
 stages:
-- stage: DeployGreen
-  jobs:
-  - job: DeployGreenRevision
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: AzureCLI@2
-      inputs:
-        azureSubscription: ${{ variables.azureSub }}
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          echo "Deploying new Green revision..."
-          az containerapp update \
-            --name ${{ variables.containerAppName }} \
-            --resource-group ${{ variables.resourceGroup }} \
-            --image ${{ variables.demoImage }} \
-            --revision-suffix ${{ variables.revisionSuffix }}
-          az containerapp revision label add \
-            --name $(containerAppName) \
-            --resource-group $(resourceGroup) \
-            --revision ${{ variables.containerAppName }}--${{ variables.revisionSuffix }} \
-            --label green
-      
-    - task: AzureCLI@2
-      inputs:
-        azureSubscription: ${{ variables.azureSub }}
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          az containerapp revision label add \
-            --name $(containerAppName) \
-            --resource-group $(resourceGroup) \
-            --revision ${{ variables.containerAppName }}--${{ variables.revisionSuffix }} \
-            --label green
-      
+  - stage: BuildAndPush
+    displayName: Build and Push OCI Image
+    jobs:
+      - job: BuildImage
+        displayName: Build OCI Image using Paketo
+        pool:
+          vmImage: 'ubuntu-latest'
 
-- stage: Validate
-  dependsOn: DeployGreen
-  jobs:
-  - job: SmokeTest
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - script: |
-        echo "Smoke testing Green revision..."
-        # Optionally curl using known URL with revision header/query param if enabled
-        echo "Test passed."
+        steps:
+          - task: Checkout@1
 
-- stage: SwitchTraffic
-  dependsOn: Validate
-  jobs:
-  - job: Set100PercentToGreen
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: AzureCLI@2
-      inputs:
-        azureSubscription: ${{ variables.azureSub }}
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          greenRev=$(az containerapp revision list \
-            --name ${{ variables.containerAppName }} \
-            --resource-group ${{ variables.resourceGroup }} \
-            --query "[?contains(name, '${{ variables.revisionSuffix }}')].name" \
-            -o tsv)
+          - script: |
+              echo "Installing pack CLI..."
+              curl -sSL "https://github.com/buildpacks/pack/releases/latest/download/pack-linux.tgz" | tar -xz
+              sudo mv pack /usr/local/bin/
+            displayName: 'Install pack CLI'
 
-          echo "Shifting 100% traffic to revision: $greenRev"
+          - script: |
+              echo "Checking for WAR file at ${{ variables.WAR_FILE }}..."
+              ls -l ${{ variables.WAR_FILE }}
+            displayName: 'Verify WAR file'
 
-          az containerapp ingress traffic set \
-            --name ${{ variables.containerAppName }} \
-            --resource-group ${{ variables.resourceGroup }} \
-            --revision-weight $greenRev=100
+          - task: Docker@2
+            displayName: 'Login to ACR'
+            inputs:
+              command: 'login'
+              containerRegistry: ${{ variables.DOCKER_REGISTRY_SERVICE_CONNECTION }}
 
-- stage: Cleanup
-  dependsOn: SwitchTraffic
-  condition: succeeded()
-  jobs:
-  - job: CleanupOldRevisions
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: AzureCLI@2
-      inputs:
-        azureSubscription: ${{ variables.azureSub }}
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          echo "Fetching revisions labeled 'blue' or 'green'..."
-          LABELLED_REVISIONS=$(az containerapp show \
-            --name ${{ variables.containerAppName }} \
-            --resource-group ${{ variables.resourceGroup }} \
-            --query "properties.configuration.ingress.traffic[?label=='blue'||label=='green'].revisionName" \
-            -o tsv)
-
-          echo "Fetching all revisions..."
-          ALL_REVISIONS=$(az containerapp revision list \
-            --name ${{ variables.containerAppName }} \
-            --resource-group ${{ variables.resourceGroup }} \
-            --query "[].name" \
-            -o tsv)
-
-          echo "Deactivating old revisions..."
-          for REVISION in $ALL_REVISIONS; do
-            if [[ ! " $LABELLED_REVISIONS " =~ " $REVISION " ]]; then
-              echo "Deactivating: $REVISION"
-              az containerapp revision deactivate \
-                --name ${{ variables.containerAppName }} \
-                --resource-group ${{ variables.resourceGroup }} \
-                --revision "$REVISION"
-            fi
-          done
-
-          echo "Cleanup complete."
+          - script: |
+              echo "Building and publishing image..."
+              pack build ${{ variables.ACR_NAME }}/${{ variables.IMAGE_NAME }}:$(Build.BuildId) \
+                --path ${{ variables.WAR_FILE }} \
+                --builder ${{ variables.BUILDER }} \
+                --publish
+            displayName: 'Build and Push using Paketo'
