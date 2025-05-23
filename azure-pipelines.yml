@@ -53,7 +53,7 @@ stages:
               scriptLocation: 'inlineScript'
               inlineScript: |
                 echo "Logging into ACR..."
-                az acr login --name $ACR_NAME
+                az acr login --name $(ACR_NAME)
             env:
               ACR_NAME: $(ACR_NAME)
 
