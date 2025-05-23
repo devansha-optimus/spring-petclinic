@@ -48,14 +48,14 @@ stages:
           - task: AzureCLI@2
             displayName: 'Login to Azure and ACR'
             inputs:
-              azureSubscription: $(AZURE_SERVICE_CONNECTION)
+              azureSubscription: ${{ variables.AZURE_SERVICE_CONNECTION }}
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
                 echo "Logging into ACR..."
-                az acr login --name $(ACR_NAME)
+                az acr login --name ${{ variables.ACR_NAME }}
             env:
-              ACR_NAME: $(ACR_NAME)
+              ACR_NAME: ${{ variables.ACR_NAME }}
 
           - script: |
               echo "Finding WAR file..."
