@@ -2,21 +2,78 @@ trigger:
   branches:
     include:
       - main
+  paths:
+    include:
+      - 'target/*.war'
+      - 'pom.xml'
+      - '**/*.java'
 
 variables:
-  AZURE_SERVICE_CONNECTION: RG-Devansh-POC-0041
+  ACR_NAME: azurespringapp
+  ACR_LOGIN_SERVER: azurespringapp.azurecr.io    
+  IMAGE_NAME: springboot-app                  # Docker image name
+  BUILDER: gcr.io/paketo-buildpacks/enterprise-builder
+  WAR_FILE: target/*.war                      # Adjust if needed
+  AZURE_SERVICE_CONNECTION: RG-Devansh-POC-0041  # azurerm service connection
 
 stages:
-  - stage: Test
+  - stage: BuildAndPush
+    displayName: Build and Push OCI Image
     jobs:
-      - job: Hello
+      - job: BuildImage
+        displayName: Build and Push OCI Image using Paketo
         pool:
           vmImage: 'ubuntu-latest'
+
         steps:
+          - task: Checkout@1
+
+          - task: Maven@3
+            displayName: 'Build WAR file'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'package'
+              options: '-DskipTests'
+              javaHomeOption: 'JDKVersion'
+              jdkVersionOption: '1.11'
+              mavenVersionOption: 'Default'
+              publishJUnitResults: false
+
+          - script: |
+              echo "Installing pack CLI..."
+              curl -sSL "https://github.com/buildpacks/pack/releases/latest/download/pack-linux.tgz" | tar -xz
+              sudo mv pack /usr/local/bin/
+            displayName: 'Install pack CLI'
+
           - task: AzureCLI@2
+            displayName: 'Login to Azure and ACR'
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
-                echo "Hello from Azure CLI task"
+                echo "Logging into ACR..."
+                az acr login --name $ACR_NAME
+            env:
+              ACR_NAME: $(ACR_NAME)
+
+          - script: |
+              echo "Finding WAR file..."
+              WAR_FILE=$(find target -name "*.war" | head -n 1)
+              echo "WAR file found at: $WAR_FILE"
+
+              echo "Building and pushing image with tag: $BUILD_BUILDID"
+              pack build $ACR_LOGIN_SERVER/$IMAGE_NAME:$BUILD_BUILDID \
+                --path $WAR_FILE \
+                --builder $BUILDER \
+                --publish
+
+              echo "Tagging and pushing image with tag: latest"
+              docker tag $ACR_LOGIN_SERVER/$IMAGE_NAME:$BUILD_BUILDID $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
+              docker push $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
+            displayName: 'Build and Push Image'
+            env:
+              ACR_LOGIN_SERVER: $(ACR_LOGIN_SERVER)
+              IMAGE_NAME: $(IMAGE_NAME)
+              BUILD_BUILDID: $(Build.BuildId)
+              BUILDER: $(BUILDER)
