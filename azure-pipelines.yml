@@ -41,7 +41,7 @@ stages:
               scriptLocation: 'inlineScript'
               inlineScript: |
                 echo "Logging into ACR..."
-                az acr login --name $(ACR_NAME)
+                az acr login --name $ACR_NAME
 
           - script: |
               echo "Building and publishing image..."
