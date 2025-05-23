@@ -13,7 +13,7 @@ variables:
   ACR_LOGIN_SERVER: azurespringapp.azurecr.io
   IMAGE_NAME: springboot-app
   BUILDER: gcr.io/paketo-buildpacks/enterprise-builder
-  WAR_FILE_PATH: target/*.war                    # Path to WAR file
+  WAR_FILE_PATH: target/demo-3.2.0.war
   AZURE_SERVICE_CONNECTION: 'RG-Devansh-POC-0041' 
 
 pool:
