@@ -13,7 +13,6 @@ variables:
   ACR_LOGIN_SERVER: azurespringapp.azurecr.io
   IMAGE_NAME: springboot-app
   BUILDER: gcr.io/paketo-buildpacks/enterprise-builder
-  WAR_FILE_PATH: target/demo-3.2.0.war
   AZURE_SERVICE_CONNECTION: 'RG-Devansh-POC-0041' 
 
 pool:
@@ -25,15 +24,11 @@ jobs:
     steps:
       - checkout: self
 
-      - task: Maven@3
-        displayName: 'Build Spring Boot WAR'
-        inputs:
-          mavenPomFile: 'pom.xml'
-          goals: 'package'
-          options: '-DskipTests'
-          javaHomeOption: 'JDKVersion'
-          jdkVersionOption: '1.11'
-          mavenVersionOption: 'Default'
+      # Optional: if you want to ensure WAR exists, otherwise skip this
+      - script: |
+          echo "Checking if WAR file exists in target directory..."
+          ls -l target/*.war
+        displayName: 'Check WAR file'
 
       - script: |
           echo "Installing pack CLI..."
