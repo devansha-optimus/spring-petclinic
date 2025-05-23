@@ -4,12 +4,11 @@ trigger:
       - main
 
 variables:
-  # ACR and image details
-  ACR_NAME: azurespringapp.azurecr.io
-  IMAGE_NAME: springboot-app
-  BUILDER: gcr.io/paketo-buildpacks/enterprise-builder
-  WAR_FILE: target/demo-3.2.0.war
-  DOCKER_REGISTRY_SERVICE_CONNECTION: RG-Devansh-POC-0041
+  ACR_NAME: azurespringapp.azurecr.io            # Replace with your ACR login server
+  IMAGE_NAME: springboot-app                 # Replace with your desired image name
+  BUILDER: gcr.io/paketo-buildpacks/enterprise-builder     # Or your enterprise builder image
+  WAR_FILE: target/demo-3.2.0.war                   # Adjust if needed
+  AZURE_SERVICE_CONNECTION: RG-Devansh-POC-0041  # Your existing azurerm service connection name
 
 stages:
   - stage: BuildAndPush
@@ -34,11 +33,15 @@ stages:
               ls -l ${{ variables.WAR_FILE }}
             displayName: 'Verify WAR file'
 
-          - task: Docker@2
-            displayName: 'Login to ACR'
+          - task: AzureCLI@2
+            displayName: 'Login to Azure and ACR'
             inputs:
-              command: 'login'
-              containerRegistry: ${{ variables.DOCKER_REGISTRY_SERVICE_CONNECTION }}
+              azureSubscription: ${{ variables.AZURE_SERVICE_CONNECTION }}
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                echo "Logging into ACR..."
+                az acr login --name $(ACR_NAME)
 
           - script: |
               echo "Building and publishing image..."
