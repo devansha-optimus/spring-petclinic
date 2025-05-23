@@ -2,17 +2,12 @@ trigger:
   branches:
     include:
       - main
-  paths:
-    include:
-      - 'target/*.war'
-      - 'pom.xml'
-      - '**/*.java'
 
 variables:
   ACR_NAME: azurespringapp
   ACR_LOGIN_SERVER: azurespringapp.azurecr.io
   IMAGE_NAME: springboot-app
-  BUILDER: gcr.io/paketo-buildpacks/enterprise-builder
+  BUILDER: gcr.io/paketo-buildpacks/builder:base
   AZURE_SERVICE_CONNECTION: 'RG-Devansh-POC-0041' 
 
 pool:
