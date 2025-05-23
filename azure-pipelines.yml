@@ -4,60 +4,19 @@ trigger:
       - main
 
 variables:
-  ACR_NAME: azurespringapp
-  ACR_LOGIN_SERVER: azurespringapp.azurecr.io     
-  IMAGE_NAME: springboot-app
-  BUILDER: gcr.io/paketo-buildpacks/enterprise-builder
-  WAR_FILE: target/demo-3.2.0.war
   AZURE_SERVICE_CONNECTION: RG-Devansh-POC-0041
 
 stages:
-  - stage: BuildAndPush
-    displayName: Build and Push OCI Image
+  - stage: Test
     jobs:
-      - job: BuildImage
-        displayName: Build OCI Image using Paketo
+      - job: Hello
         pool:
           vmImage: 'ubuntu-latest'
-
         steps:
-          - task: Checkout@1
-
-          - script: |
-              echo "Installing pack CLI..."
-              curl -sSL "https://github.com/buildpacks/pack/releases/latest/download/pack-linux.tgz" | tar -xz
-              sudo mv pack /usr/local/bin/
-            displayName: 'Install pack CLI'
-
-          - script: |
-              echo "Checking for WAR file..."
-              ls -l $WAR_FILE
-            displayName: 'Verify WAR file'
-            env:
-              WAR_FILE: $(WAR_FILE)
-
           - task: AzureCLI@2
-            displayName: 'Login to Azure and ACR'
             inputs:
               azureSubscription: $(AZURE_SERVICE_CONNECTION)
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
-                echo "Logging into ACR..."
-                az acr login --name $ACR_NAME
-            env:
-              ACR_NAME: $(ACR_NAME)
-
-          - script: |
-              echo "Building and pushing OCI image with pack..."
-              pack build $ACR_LOGIN_SERVER/$IMAGE_NAME:$BUILD_BUILDID \
-                --path $WAR_FILE \
-                --builder $BUILDER \
-                --publish
-            displayName: 'Build and Push Image with Pack'
-            env:
-              ACR_LOGIN_SERVER: $(ACR_LOGIN_SERVER)
-              IMAGE_NAME: $(IMAGE_NAME)
-              BUILD_BUILDID: $(Build.BuildId)
-              WAR_FILE: $(WAR_FILE)
-              BUILDER: $(BUILDER)
+                echo "Hello from Azure CLI task"
