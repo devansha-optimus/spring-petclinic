@@ -4,11 +4,12 @@ trigger:
       - main
 
 variables:
-  ACR_NAME: azurespringapp.azurecr.io            # Replace with your ACR login server
-  IMAGE_NAME: springboot-app                 # Replace with your desired image name
-  BUILDER: gcr.io/paketo-buildpacks/enterprise-builder     # Or your enterprise builder image
-  WAR_FILE: target/demo-3.2.0.war                   # Adjust if needed
-  AZURE_SERVICE_CONNECTION: RG-Devansh-POC-0041  # Your existing azurerm service connection name
+  ACR_NAME: azurespringapp
+  ACR_LOGIN_SERVER: azurespringapp.azurecr.io     
+  IMAGE_NAME: springboot-app
+  BUILDER: gcr.io/paketo-buildpacks/enterprise-builder
+  WAR_FILE: target/demo-3.2.0.war
+  AZURE_SERVICE_CONNECTION: RG-Devansh-POC-0041
 
 stages:
   - stage: BuildAndPush
@@ -29,24 +30,34 @@ stages:
             displayName: 'Install pack CLI'
 
           - script: |
-              echo "Checking for WAR file at ${{ variables.WAR_FILE }}..."
-              ls -l ${{ variables.WAR_FILE }}
+              echo "Checking for WAR file..."
+              ls -l $WAR_FILE
             displayName: 'Verify WAR file'
+            env:
+              WAR_FILE: $(WAR_FILE)
 
           - task: AzureCLI@2
             displayName: 'Login to Azure and ACR'
             inputs:
-              azureSubscription: ${{ variables.AZURE_SERVICE_CONNECTION }}
+              azureSubscription: $(AZURE_SERVICE_CONNECTION)
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
                 echo "Logging into ACR..."
                 az acr login --name $ACR_NAME
+            env:
+              ACR_NAME: $(ACR_NAME)
 
           - script: |
-              echo "Building and publishing image..."
-              pack build ${{ variables.ACR_NAME }}/${{ variables.IMAGE_NAME }}:$(Build.BuildId) \
-                --path ${{ variables.WAR_FILE }} \
-                --builder ${{ variables.BUILDER }} \
+              echo "Building and pushing OCI image with pack..."
+              pack build $ACR_LOGIN_SERVER/$IMAGE_NAME:$BUILD_BUILDID \
+                --path $WAR_FILE \
+                --builder $BUILDER \
                 --publish
-            displayName: 'Build and Push using Paketo'
+            displayName: 'Build and Push Image with Pack'
+            env:
+              ACR_LOGIN_SERVER: $(ACR_LOGIN_SERVER)
+              IMAGE_NAME: $(IMAGE_NAME)
+              BUILD_BUILDID: $(Build.BuildId)
+              WAR_FILE: $(WAR_FILE)
+              BUILDER: $(BUILDER)
