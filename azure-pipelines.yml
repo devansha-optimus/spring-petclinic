@@ -32,7 +32,7 @@ jobs:
 
       - script: |
           echo "Installing pack CLI..."
-          curl -sSL "https://github.com/buildpacks/pack/releases/latest/download/pack-linux.tgz" | tar -xz
+          curl -sSL "https://github.com/buildpacks/pack/releases/download/v0.30.0/pack-v0.30.0-linux.tgz" | tar -xz
           sudo mv pack /usr/local/bin/
         displayName: 'Install pack CLI'
 
