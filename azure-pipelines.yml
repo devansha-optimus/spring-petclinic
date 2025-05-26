@@ -7,7 +7,7 @@ variables:
   ACR_NAME: azurespringapp
   ACR_LOGIN_SERVER: azurespringapp.azurecr.io
   IMAGE_NAME: springboot-app
-  BUILDER: docker://docker.io/paketobuildpacks/java-azure:latest
+  BUILDER: azurespringapp.azurecr.io/azure-spring-builder:latest
   AZURE_SERVICE_CONNECTION: 'RG-Devansh-POC-0041' 
 
 pool:
