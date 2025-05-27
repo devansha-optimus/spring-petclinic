@@ -12,9 +12,9 @@ stages:
     jobs:
       - template: templates/releaseByModule.yaml
         parameters:
-          projectName: 'AGF.com-POC'    # required
-          repoName: 'spring-petclinic'          # required
-          branchName: 'main'                # required, or your branch name
-          jobName: 'ReleaseJob'             # required, any valid string
-          module: '.'                      # optional, your module path
+          module: '.'
           relVersion: ${{ parameters.relVersion }}
+          jobName: ReleaseJob
+          projectName: AGF.com-POC
+          repoName: spring-petclinic
+          branchName: main
