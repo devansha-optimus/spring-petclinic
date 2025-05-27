@@ -10,7 +10,7 @@ stages:
   - stage: Release
     displayName: "Release Stage"
     jobs:
-      - template: spring-petclinic/templates/releaseByModule.yaml
+      - template: 'templates/releaseByModule.yaml'
         parameters:
           module: '.'
           relVersion: ${{ parameters.relVersion }}
