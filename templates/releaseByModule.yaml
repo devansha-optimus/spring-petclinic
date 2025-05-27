@@ -1,0 +1,36 @@
+parameters:
+  - name: relVersion
+    type: string
+    default: '1.0.0-SNAPSHOT'
+  - name: module
+    type: string
+    default: '.'
+
+jobs:
+  - job: Release_${{ parameters.module }}
+    displayName: "Release Module - ${{ parameters.module }}"
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    steps:
+      - task: Checkout@1
+        displayName: 'Checkout Code'
+
+      - task: Maven@3
+        displayName: 'Set Maven Version'
+        inputs:
+          mavenPomFile: '${{ parameters.module }}/pom.xml'
+          goals: 'versions:set'
+          options: '-DnewVersion=${{ parameters.relVersion }}'
+
+      - script: |
+          echo "Building module with version: ${{ parameters.relVersion }}"
+          mvn clean package
+        workingDirectory: ${{ parameters.module }}
+        displayName: 'Build Module'
+
+      - task: PublishBuildArtifacts@1
+        displayName: 'Publish Artifacts'
+        inputs:
+          PathtoPublish: '$(System.DefaultWorkingDirectory)/${{ parameters.module }}/target'
+          ArtifactName: '${{ parameters.module }}-artifact'
