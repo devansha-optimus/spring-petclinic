@@ -7,7 +7,7 @@ parameters:
     default: '.'
 
 jobs:
-  - job: Release_${{ parameters.module }}
+  - job: Release_${{ replace(replace(parameters.module, '.', 'root'), '/', '_') }}
     displayName: "Release Module - ${{ parameters.module }}"
     pool:
       vmImage: 'ubuntu-latest'
@@ -33,4 +33,4 @@ jobs:
         displayName: 'Publish Artifacts'
         inputs:
           PathtoPublish: '$(System.DefaultWorkingDirectory)/${{ parameters.module }}/target'
-          ArtifactName: '${{ parameters.module }}-artifact'
+          ArtifactName: '${{ replace(replace(parameters.module, '.', 'root'), '/', '_') }}-artifact'
