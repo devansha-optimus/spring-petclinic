@@ -10,7 +10,7 @@ stages:
   - stage: Release
     displayName: "Release Stage"
     jobs:
-      - template: ./templates/rbm.yml
+      - template: ./templates/rbms.yml
         parameters:
           module: '.'
           relVersion: ${{ parameters.relVersion }}
