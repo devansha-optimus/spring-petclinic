@@ -11,6 +11,7 @@ stages:
     displayName: "Release Stage"
     jobs:
       - template: templates/releaseByModule.yaml
+        repository: self
         parameters:
           module: '.'
           relVersion: ${{ parameters.relVersion }}
