@@ -6,17 +6,14 @@ parameters:
     type: string
     default: '.'
 
-variables:
-  moduleNameSanitized: ${{ replace(replace(parameters.module, '.', 'root'), '/', '_') }}
-
 jobs:
-  - job: Release_${{ variables.moduleNameSanitized }}
+  - job: release_${{ replace(replace(parameters.module, '.', 'root'), '/', '_') }}
     displayName: "Release Module - ${{ parameters.module }}"
     pool:
       vmImage: 'ubuntu-latest'
 
     steps:
-      - task: Checkout@1
+      - checkout: self
         displayName: 'Checkout Code'
 
       - task: Maven@3
@@ -27,13 +24,14 @@ jobs:
           options: '-DnewVersion=${{ parameters.relVersion }}'
 
       - script: |
-          echo "Building module with version: ${{ parameters.relVersion }}"
+          echo "Building module: ${{ parameters.module }}"
+          echo "Version: ${{ parameters.relVersion }}"
           mvn clean package
         workingDirectory: ${{ parameters.module }}
         displayName: 'Build Module'
 
       - task: PublishBuildArtifacts@1
-        displayName: 'Publish Artifacts'
+        displayName: 'Publish Artifact'
         inputs:
           PathtoPublish: '$(System.DefaultWorkingDirectory)/${{ parameters.module }}/target'
-          ArtifactName: '${{ variables.moduleNameSanitized }}-artifact'
+          ArtifactName: '${{ replace(replace(parameters.module, '.', 'root'), '/', '_') }}-artifact'
