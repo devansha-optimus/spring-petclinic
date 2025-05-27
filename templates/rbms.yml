@@ -1,4 +1,3 @@
-# File: templates/releaseByModule.yaml
 parameters:
   - name: projectName
     type: string
@@ -18,7 +17,7 @@ jobs:
   displayName: '${{ parameters.jobName }}-build-release'
   continueOnError: false
   variables:
-    # Precompute sanitized module name to use in artifact name (replace '.' with 'root' and '/' with '_')
+    # Sanitize module name (replace '.' with 'root' and '/' with '_')
     sanitizedModuleName: ${{ replace(replace(parameters.module, '.', 'root'), '/', '_') }}
 
   steps:
@@ -29,24 +28,32 @@ jobs:
         echo "##vso[task.setvariable variable=JAVA_HOME]$(JAVA_HOME_8_X64)"
         echo "##vso[task.setvariable variable=PATH]$(JAVA_HOME_8_X64)\bin;$(PATH)"
 
-  - template: ${{ variables['System.DefaultWorkingDirectory'] }}/templates/agf2-buildSettings.yml@templates 
+  # Include build settings template from 'templates' repository resource
+  - template: templates/agf2-buildSettings.yml@templates
 
-  - checkout: git://${{ parameters.projectName }}/${{ parameters.repoName }}@${{ parameters.branchName }}
-    path: s
+  # Checkout the main repository (self) at the specified branch
+  - checkout: self
+    clean: true
+    persistCredentials: true
+    fetchDepth: 0
+    displayName: 'Checkout repository'
+  
+  # Optional: If you want to checkout a different repo, define it as a resource and use that alias here.
 
   - task: Bash@3
-    displayName: get parentPOM
+    displayName: Get parentPOM directory
     name: parentPOMName
     inputs:
       targetType: inline
       script: |
-        dirs=`find "$(System.DefaultWorkingDirectory)/" -type d -name "*[Pp]arentPOM*"`
+        dirs=$(find "$(System.DefaultWorkingDirectory)/" -type d -name "*[Pp]arentPOM*")
         echo "--dir  $dirs"
-        parent=$(basename $dirs)
+        parent=$(basename "$dirs")
         echo "--parent  $parent"
         echo "##vso[task.setvariable variable=PARENT_POM;isOutput=true]$parent"
 
-  - ${{ if eq(parameters.relVersion, ' ') }}:
+  # Conditional: If relVersion is empty, compute version from POM
+  - ${{ if eq(parameters.relVersion, '') }}:
     - task: Bash@3
       name: projectVersion
       inputs:
@@ -60,14 +67,15 @@ jobs:
           else
             currentVer=$pomrev
           fi
-          echo "currentVer, $currentVer"
+          echo "currentVer: $currentVer"
           newVer=$(echo $currentVer | awk -F'.' -v OFS="." '{$NF=$NF+1; print $0}')
           echo "new version: $newVer"
           echo "##vso[task.setvariable variable=FUTURE_VERSION;isOutput=true]$newVer"
           cv=$(echo $currentVer | awk -F'-' '{print $1}')
           echo "##vso[task.setvariable variable=RELEASE_VERSION;isOutput=true]$cv"
 
-  - ${{ if ne(parameters.relVersion, ' ') }}:
+  # Conditional: If relVersion is provided, use it
+  - ${{ if ne(parameters.relVersion, '') }}:
     - task: Bash@3
       name: projectVersion
       inputs:
@@ -87,20 +95,21 @@ jobs:
     inputs:
       targetType: inline
       script: |
-        echo "${{ parameters.module }}"
+        echo "Module: ${{ parameters.module }}"
         if [[ ! -z "$(parentPOMName.PARENT_POM)" ]]; then
           mvn clean package -f $(parentPOMName.PARENT_POM)/pom.xml --settings $(Agent.TempDirectory)/settings3.xml --projects ":${{ parameters.module }}" -Drevision=$(projectVersion.RELEASE_VERSION) -Drepo_release_id=$(repo_release_id) -Drepo_release_url=$(repo_release_url) -Daccess_token=$(System.AccessToken)
         else
           mvn clean package -f ./pom.xml --settings $(Agent.TempDirectory)/settings3.xml --projects ":${{ parameters.module }}" -Drevision=$(projectVersion.RELEASE_VERSION) -Drepo_release_id=$(repo_release_id) -Drepo_release_url=$(repo_release_url) -Daccess_token=$(System.AccessToken)
         fi
         if [ $? -eq 0 ]; then
-          echo "Successfully packed"
+          echo "Successfully packaged"
         else
           echo "Package failed"
           exit 1
         fi
 
-  - template: ${{ variables['System.DefaultWorkingDirectory'] }}/templates/agf2-publishByModule.yml@templates
+  # Include publish template from 'templates' repository resource
+  - template: templates/agf2-publishByModule.yml@templates
     parameters:
       module: ${{ parameters.module }}
 
@@ -111,14 +120,14 @@ jobs:
     inputs:
       targetType: inline
       script: |
-        echo "${{ parameters.module }}"
+        echo "Deploying module: ${{ parameters.module }}"
         if [[ ! -z "$(parentPOMName.PARENT_POM)" ]]; then
           mvn deploy -f $(parentPOMName.PARENT_POM)/pom.xml -Psbom --settings $(Agent.TempDirectory)/settings3.xml --projects ":${{ parameters.module }}" -Drevision=$(projectVersion.RELEASE_VERSION) -Drepo_release_id=$(repo_release_id) -Drepo_release_url=$(repo_release_url) -Daccess_token=$(System.AccessToken)
         else
           mvn deploy -f ./pom.xml -Psbom --settings $(Agent.TempDirectory)/settings3.xml --projects ":${{ parameters.module }}" -Drevision=$(projectVersion.RELEASE_VERSION) -Drepo_release_id=$(repo_release_id) -Drepo_release_url=$(repo_release_url) -Daccess_token=$(System.AccessToken)
         fi
         if [ $? -eq 0 ]; then
-          echo "Successfully Deployed"
+          echo "Successfully deployed"
         else
           echo "Deploy failed"
           exit 1
