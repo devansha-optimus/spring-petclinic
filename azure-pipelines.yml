@@ -5,6 +5,9 @@ parameters:
   - name: relVersion
     type: string
     default: '1.0.1-SNAPSHOT'
+  - name: rep
+    type: string
+    default: "./"
 
 stages:
   - stage: Release
