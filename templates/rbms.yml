@@ -1,134 +1,19 @@
 parameters:
-  - name: projectName
-    type: string
-  - name: repoName
-    type: string
-  - name: branchName
-    type: string
   - name: module
     type: string
   - name: relVersion
     type: string
   - name: jobName
     type: string
+  - name: projectName
+    type: string
+  - name: repoName
+    type: string
+  - name: branchName
+    type: string
 
 jobs:
-- job: ${{ parameters.jobName }}_BuildRelease
-  displayName: '${{ parameters.jobName }}-build-release'
-  continueOnError: false
-  variables:
-    # Sanitize module name (replace '.' with 'root' and '/' with '_')
-    sanitizedModuleName: ${{ replace(replace(parameters.module, '.', 'root'), '/', '_') }}
-
+- job: ${{ parameters.jobName }}
+  displayName: "Release ${{ parameters.module }} version ${{ parameters.relVersion }}"
   steps:
-  - task: PowerShell@2
-    inputs:
-      targetType: 'inline'
-      script: |
-        echo "##vso[task.setvariable variable=JAVA_HOME]$(JAVA_HOME_8_X64)"
-        echo "##vso[task.setvariable variable=PATH]$(JAVA_HOME_8_X64)\bin;$(PATH)"
-
-  # Include build settings template from 'templates' repository resource
-  - template: templates/agf2-buildSettings.yml@templates
-
-  # Checkout the main repository (self) at the specified branch
-  - checkout: self
-    clean: true
-    persistCredentials: true
-    fetchDepth: 0
-    displayName: 'Checkout repository'
-  
-  # Optional: If you want to checkout a different repo, define it as a resource and use that alias here.
-
-  - task: Bash@3
-    displayName: Get parentPOM directory
-    name: parentPOMName
-    inputs:
-      targetType: inline
-      script: |
-        dirs=$(find "$(System.DefaultWorkingDirectory)/" -type d -name "*[Pp]arentPOM*")
-        echo "--dir  $dirs"
-        parent=$(basename "$dirs")
-        echo "--parent  $parent"
-        echo "##vso[task.setvariable variable=PARENT_POM;isOutput=true]$parent"
-
-  # Conditional: If relVersion is empty, compute version from POM
-  - ${{ if eq(parameters.relVersion, '') }}:
-    - task: Bash@3
-      name: projectVersion
-      inputs:
-        targetType: inline
-        workingDirectory: $(System.DefaultWorkingDirectory)/$(parentPOMName.PARENT_POM)
-        script: |
-          pomver=$(sed  '/<parent>/,/<\/parent>/d' pom.xml | sed  '/dependencies>/,/<\/dependencies>/d' | sed '/<build>/,/<\/build>/d' | sed '/<properties>/,/<\/properties>/d' |sed '/<dependencyManagement>/,/<\/dependencyManagement>/d' |grep '<version>'| awk -F'[<>]' '{print $3}')
-          pomrev=$(sed -n -e '/<properties>/,/<\/properties>/s/ *<\([^>]*\)>\([^<]*\)<.*$/\1=\2/p' pom.xml |grep revision | awk -F'=' '{print $2}' | awk -F'-' '{print $1}')
-          if [[ $pomver != "\${revision}" ]]; then
-            currentVer=$(echo "$pomver" | awk -F'-' '{print $1}')
-          else
-            currentVer=$pomrev
-          fi
-          echo "currentVer: $currentVer"
-          newVer=$(echo $currentVer | awk -F'.' -v OFS="." '{$NF=$NF+1; print $0}')
-          echo "new version: $newVer"
-          echo "##vso[task.setvariable variable=FUTURE_VERSION;isOutput=true]$newVer"
-          cv=$(echo $currentVer | awk -F'-' '{print $1}')
-          echo "##vso[task.setvariable variable=RELEASE_VERSION;isOutput=true]$cv"
-
-  # Conditional: If relVersion is provided, use it
-  - ${{ if ne(parameters.relVersion, '') }}:
-    - task: Bash@3
-      name: projectVersion
-      inputs:
-        targetType: inline
-        workingDirectory: $(System.DefaultWorkingDirectory)/$(parentPOMName.PARENT_POM)
-        script: |
-          echo "releaseVersion: ${{ parameters.relVersion }}"
-          temp="${{ parameters.relVersion }}"
-          nv=$(echo $temp | xargs echo -n)
-          newVer=$(echo $nv | awk -F'.' '{print $1"."($2 + 1)}')
-          echo "##vso[task.setvariable variable=FUTURE_VERSION;isOutput=true]$newVer"
-          echo "##vso[task.setvariable variable=RELEASE_VERSION;isOutput=true]$nv"
-
-  - task: Bash@3
-    displayName: Package release artifact
-    name: packageRelease
-    inputs:
-      targetType: inline
-      script: |
-        echo "Module: ${{ parameters.module }}"
-        if [[ ! -z "$(parentPOMName.PARENT_POM)" ]]; then
-          mvn clean package -f $(parentPOMName.PARENT_POM)/pom.xml --settings $(Agent.TempDirectory)/settings3.xml --projects ":${{ parameters.module }}" -Drevision=$(projectVersion.RELEASE_VERSION) -Drepo_release_id=$(repo_release_id) -Drepo_release_url=$(repo_release_url) -Daccess_token=$(System.AccessToken)
-        else
-          mvn clean package -f ./pom.xml --settings $(Agent.TempDirectory)/settings3.xml --projects ":${{ parameters.module }}" -Drevision=$(projectVersion.RELEASE_VERSION) -Drepo_release_id=$(repo_release_id) -Drepo_release_url=$(repo_release_url) -Daccess_token=$(System.AccessToken)
-        fi
-        if [ $? -eq 0 ]; then
-          echo "Successfully packaged"
-        else
-          echo "Package failed"
-          exit 1
-        fi
-
-  # Include publish template from 'templates' repository resource
-  - template: templates/agf2-publishByModule.yml@templates
-    parameters:
-      module: ${{ parameters.module }}
-
-  - task: Bash@3
-    displayName: Deploy release artifact
-    name: deployRelease
-    continueOnError: false
-    inputs:
-      targetType: inline
-      script: |
-        echo "Deploying module: ${{ parameters.module }}"
-        if [[ ! -z "$(parentPOMName.PARENT_POM)" ]]; then
-          mvn deploy -f $(parentPOMName.PARENT_POM)/pom.xml -Psbom --settings $(Agent.TempDirectory)/settings3.xml --projects ":${{ parameters.module }}" -Drevision=$(projectVersion.RELEASE_VERSION) -Drepo_release_id=$(repo_release_id) -Drepo_release_url=$(repo_release_url) -Daccess_token=$(System.AccessToken)
-        else
-          mvn deploy -f ./pom.xml -Psbom --settings $(Agent.TempDirectory)/settings3.xml --projects ":${{ parameters.module }}" -Drevision=$(projectVersion.RELEASE_VERSION) -Drepo_release_id=$(repo_release_id) -Drepo_release_url=$(repo_release_url) -Daccess_token=$(System.AccessToken)
-        fi
-        if [ $? -eq 0 ]; then
-          echo "Successfully deployed"
-        else
-          echo "Deploy failed"
-          exit 1
-        fi
+    - script: echo "Releasing module ${{ parameters.module }} version ${{ parameters.relVersion }}"
