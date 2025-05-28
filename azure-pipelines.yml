@@ -1,20 +1,28 @@
 trigger: none
 pr: none
 
+resources:
+  repositories:
+    - repository: templates                   # Logical alias for this repo
+      type: github
+      name: devansha-optimus/templates           # GitHub org/repo
+      ref: refs/heads/main                    # Use appropriate branch or tag
+      endpoint: devansha-optimus             # Name of the GitHub service connection
+
 parameters:
   - name: relVersion
     type: string
     default: '1.0.1-SNAPSHOT'
-    
+
 stages:
   - stage: Release
     displayName: "Release Stage"
     jobs:
-      - template: ./templates/rbms.yml
+      - template: templates/rbms.yml  # Alias + path to template in GitHub repo
         parameters:
           module: '.'
           relVersion: ${{ parameters.relVersion }}
           jobName: ReleaseJob
           projectName: AGF.com-POC
-          repoName: spring-petclinic
+          repoName: templates
           branchName: main
