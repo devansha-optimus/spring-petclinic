@@ -26,7 +26,7 @@ jobs:
       - task: DownloadPipelineArtifact@2
         displayName: 'Download WAR Artifact'
         inputs:
-          build: $[ resources.pipeline.buildWarPipeline.runID ]
+          build: $[ resources.pipeline.buildWarPipeline ]
           artifact: 'springboot-war'
           path: '$(Pipeline.Workspace)/war-artifact'
 
