@@ -27,12 +27,12 @@ jobs:
       artifact: springboot-war
 
     - script: |
-        echo "Downloading pack CLI..."
-        curl -sSL -o pack.tgz https://github.com/buildpacks/pack/releases/latest/download/pack-linux.tgz
-        file pack.tgz
-        tar -xzvf pack.tgz
+        echo "Downloading pack CLI v0.32.0..."
+        curl -sSL -o pack.tgz https://github.com/buildpacks/pack/releases/download/v0.32.0/pack-v0.32.0-linux.tgz
+        tar -xzf pack.tgz
         sudo mv pack /usr/local/bin/
       displayName: 'Install pack CLI'
+
 
     - task: AzureCLI@2
       displayName: 'Login to ACR'
