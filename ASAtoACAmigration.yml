@@ -32,4 +32,3 @@ steps:
     pathToPublish: 'target'
     artifactName: 'springboot-war'
     publishLocation: 'Container'
-
