@@ -1,12 +1,12 @@
 name: 'oci-image-builder'
 
-trigger: none  # Disable direct triggering. Triggered via resources.
+trigger: none  # Prevent manual/automatic trigger from commits
 
 resources:
   pipelines:
     - pipeline: buildWarPipeline
-      source: devansha-optimus.spring-petclinic  # Name of your WAR pipeline
-      trigger: true
+      source: devansha-optimus.spring-petclinic-buildwar  # Name of the WAR pipeline
+      trigger: true                              # Automatically trigger when that pipeline completes
 
 variables:
   ACR_NAME: azurespringapp
@@ -26,13 +26,13 @@ jobs:
     - task: DownloadPipelineArtifact@2
       displayName: 'Download WAR Artifact'
       inputs:
-        buildType: 'current'
-        artifact: 'springboot-war'
+        source: buildWarPipeline        # References the resource pipeline above
+        artifact: springboot-war        # Must match the name used in PublishBuildArtifacts
         path: '$(Pipeline.Workspace)/war-artifact'
 
     - script: |
         echo "Installing pack CLI..."
-        curl -sSL "https://github.com/buildpacks/pack/releases/latest/download/pack-linux.tgz" | tar -xvz
+        curl -sSL "https://github.com/buildpacks/pack/releases/latest/download/pack-linux.tgz" | tar -xz
         sudo mv pack /usr/local/bin/
       displayName: 'Install pack CLI'
 
@@ -48,16 +48,17 @@ jobs:
         ACR_NAME: $(ACR_NAME)
 
     - script: |
+        echo "Finding WAR file..."
         WAR_FILE=$(find $(Pipeline.Workspace)/war-artifact -name "*.war" | head -n 1)
-        echo "WAR file: $WAR_FILE"
+        echo "WAR file located: $WAR_FILE"
 
-        echo "Building OCI image..."
+        echo "Building OCI image using Paketo Buildpacks..."
         pack build $ACR_LOGIN_SERVER/$IMAGE_NAME:$(Build.BuildId) \
           --path $WAR_FILE \
           --builder $BUILDER \
           --publish
 
-        echo "Tagging latest..."
+        echo "Tagging image as latest..."
         docker tag $ACR_LOGIN_SERVER/$IMAGE_NAME:$(Build.BuildId) $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
         docker push $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
       displayName: 'Build and Push OCI Image'
