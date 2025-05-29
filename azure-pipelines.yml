@@ -27,8 +27,10 @@ jobs:
       artifact: springboot-war
 
     - script: |
-        echo "Installing pack CLI..."
-        curl -sSL "https://github.com/buildpacks/pack/releases/latest/download/pack-linux.tgz" | tar -xz
+        echo "Downloading pack CLI..."
+        curl -sSL -o pack.tgz https://github.com/buildpacks/pack/releases/latest/download/pack-linux.tgz
+        file pack.tgz
+        tar -xzvf pack.tgz
         sudo mv pack /usr/local/bin/
       displayName: 'Install pack CLI'
 
