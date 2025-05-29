@@ -21,6 +21,7 @@ steps:
 
   - task: DownloadPipelineArtifact@2
     inputs:
+      project: 'AGF-POC'       # e.g. 'devansha-optimus' or whatever your project is named
       buildType: 'specific'
       pipeline: $(resources.pipeline.warBuildPipeline.pipelineId)
       buildVersionToDownload: 'specific'
