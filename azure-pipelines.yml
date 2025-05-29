@@ -1,11 +1,12 @@
-trigger: none  # Triggered via pipeline resource, not code push
+name: 'oci-image-builder'
+
+trigger: none  # Disable direct triggering. Triggered via resources.
 
 resources:
   pipelines:
     - pipeline: buildWarPipeline
-      source: devansha-optimus.spring-petclinic-buildwar
-      trigger: true        # Auto-trigger when WAR pipeline completes
-      branch: main
+      source: devansha-optimus.spring-petclinic  # Name of your WAR pipeline
+      trigger: true
 
 variables:
   ACR_NAME: azurespringapp
@@ -18,51 +19,49 @@ pool:
   vmImage: ubuntu-latest
 
 jobs:
-  - job: BuildAndPushImage
-    displayName: Build and Push OCI Image from WAR
-    steps:
-      - checkout: none  # We only need artifacts, not repo code
+- job: BuildAndPushImage
+  displayName: 'Build and Push OCI Image'
+  steps:
 
-      - task: DownloadPipelineArtifact@2
-        displayName: 'Download WAR Artifact'
-        inputs:
-          artifact: 'springboot-war'  # Must match exactly
-          path: '$(Pipeline.Workspace)/war-artifact'
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download WAR Artifact'
+      inputs:
+        buildType: 'current'
+        artifact: 'springboot-war'
+        path: '$(Pipeline.Workspace)/war-artifact'
 
+    - script: |
+        echo "Installing pack CLI..."
+        curl -sSL "https://github.com/buildpacks/pack/releases/latest/download/pack-linux.tgz" | tar -xvz
+        sudo mv pack /usr/local/bin/
+      displayName: 'Install pack CLI'
 
-      - script: |
-          echo "Installing pack CLI..."
-          curl -L "https://github.com/buildpacks/pack/releases/latest/download/pack-linux.tgz" | tar -xz
-          sudo mv pack /usr/local/bin/
-        displayName: 'Install pack CLI'
+    - task: AzureCLI@2
+      displayName: 'Login to ACR'
+      inputs:
+        azureSubscription: $(AZURE_SERVICE_CONNECTION)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          az acr login --name $ACR_NAME
+      env:
+        ACR_NAME: $(ACR_NAME)
 
-      - task: AzureCLI@2
-        displayName: 'Login to ACR'
-        inputs:
-          azureSubscription: $(AZURE_SERVICE_CONNECTION)
-          scriptType: bash
-          scriptLocation: inlineScript
-          inlineScript: |
-            echo "Logging in to ACR: $ACR_NAME"
-            az acr login --name $ACR_NAME
+    - script: |
+        WAR_FILE=$(find $(Pipeline.Workspace)/war-artifact -name "*.war" | head -n 1)
+        echo "WAR file: $WAR_FILE"
 
-      - script: |
-          WAR_FILE=$(find $(Pipeline.Workspace)/war-artifact -name "*.war" | head -n 1)
-          echo "WAR file located at: $WAR_FILE"
+        echo "Building OCI image..."
+        pack build $ACR_LOGIN_SERVER/$IMAGE_NAME:$(Build.BuildId) \
+          --path $WAR_FILE \
+          --builder $BUILDER \
+          --publish
 
-          echo "Building image using Paketo builder..."
-          pack build $ACR_LOGIN_SERVER/$IMAGE_NAME:$(Build.BuildId) \
-            --path $WAR_FILE \
-            --builder $BUILDER \
-            --publish
-
-          echo "Tagging image as latest..."
-          docker tag $ACR_LOGIN_SERVER/$IMAGE_NAME:$(Build.BuildId) $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
-
-          echo "Pushing latest tag..."
-          docker push $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
-        displayName: 'Build and Push OCI Image'
-        env:
-          ACR_LOGIN_SERVER: $(ACR_LOGIN_SERVER)
-          IMAGE_NAME: $(IMAGE_NAME)
-          BUILDER: $(BUILDER)
+        echo "Tagging latest..."
+        docker tag $ACR_LOGIN_SERVER/$IMAGE_NAME:$(Build.BuildId) $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
+        docker push $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
+      displayName: 'Build and Push OCI Image'
+      env:
+        ACR_LOGIN_SERVER: $(ACR_LOGIN_SERVER)
+        IMAGE_NAME: $(IMAGE_NAME)
+        BUILDER: $(BUILDER)
