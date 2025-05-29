@@ -1,10 +1,11 @@
-trigger: none
+trigger: none  # Triggered via pipeline resource, not code push
 
 resources:
   pipelines:
-    - pipeline: warBuildPipeline
-      source: 'devansha-optimus.spring-petclinic'  # <-- exact name of your WAR build pipeline
-      trigger: true
+    - pipeline: buildWarPipeline
+      source: devansha-optimus.spring-petclinic
+      trigger: true        # Auto-trigger when WAR pipeline completes
+      branch: main
 
 variables:
   ACR_NAME: azurespringapp
@@ -16,59 +17,52 @@ variables:
 pool:
   vmImage: ubuntu-latest
 
-steps:
-  - checkout: none  # No code checkout needed
+jobs:
+  - job: BuildAndPushImage
+    displayName: Build and Push OCI Image from WAR
+    steps:
+      - checkout: none  # We only need artifacts, not repo code
 
-  - task: DownloadPipelineArtifact@2
-    inputs:
-      project: 'AGF-POC'                     # <-- Your actual Azure DevOps project name
-      buildType: 'specific'
-      pipeline: $(resources.pipeline.warBuildPipeline.pipelineId)
-      buildVersionToDownload: 'specific'
-      buildId: $(resources.pipeline.warBuildPipeline.runId)
-      artifact: 'springboot-war'                      # <-- Artifact name from the WAR build pipeline
-      targetPath: '$(Pipeline.Workspace)/war-artifact'
+      - task: DownloadPipelineArtifact@2
+        displayName: 'Download WAR Artifact'
+        inputs:
+          build: $[ resources.pipeline.buildWarPipeline.runID ]
+          artifact: 'springboot-war'
+          path: '$(Pipeline.Workspace)/war-artifact'
 
-  - script: |
-      echo "Installing pack CLI..."
-      PACK_VERSION="0.33.2"
-      curl -L -o pack.tgz "https://github.com/buildpacks/pack/releases/download/v${PACK_VERSION}/pack-v${PACK_VERSION}-linux.tgz"
-      tar -xzf pack.tgz
-      sudo mv pack /usr/local/bin/
-    displayName: 'Install pack CLI'
+      - script: |
+          echo "Installing pack CLI..."
+          curl -L "https://github.com/buildpacks/pack/releases/latest/download/pack-linux.tgz" | tar -xz
+          sudo mv pack /usr/local/bin/
+        displayName: 'Install pack CLI'
 
-  - script: |
-      pack --version
-    displayName: 'Verify pack CLI installation'
+      - task: AzureCLI@2
+        displayName: 'Login to ACR'
+        inputs:
+          azureSubscription: $(AZURE_SERVICE_CONNECTION)
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            echo "Logging in to ACR: $ACR_NAME"
+            az acr login --name $ACR_NAME
 
-  - task: AzureCLI@2
-    displayName: 'Login to Azure Container Registry'
-    inputs:
-      azureSubscription: $(AZURE_SERVICE_CONNECTION)
-      scriptType: bash
-      scriptLocation: inlineScript
-      inlineScript: |
-        az acr login --name $ACR_NAME
-    env:
-      ACR_NAME: $(ACR_NAME)
+      - script: |
+          WAR_FILE=$(find $(Pipeline.Workspace)/war-artifact -name "*.war" | head -n 1)
+          echo "WAR file located at: $WAR_FILE"
 
-  - script: |
-      WAR_FILE=$(find $(Pipeline.Workspace)/war-artifact -name "*.war" | head -n 1)
-      echo "WAR file located at: $WAR_FILE"
-      
-      echo "Building and pushing image with tag: $(Build.BuildId)"
-      pack build $ACR_LOGIN_SERVER/$IMAGE_NAME:$(Build.BuildId) \
-        --path "$WAR_FILE" \
-        --builder $BUILDER \
-        --publish
+          echo "Building image using Paketo builder..."
+          pack build $ACR_LOGIN_SERVER/$IMAGE_NAME:$(Build.BuildId) \
+            --path $WAR_FILE \
+            --builder $BUILDER \
+            --publish
 
-      echo "Tagging image as latest"
-      docker tag $ACR_LOGIN_SERVER/$IMAGE_NAME:$(Build.BuildId) $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
+          echo "Tagging image as latest..."
+          docker tag $ACR_LOGIN_SERVER/$IMAGE_NAME:$(Build.BuildId) $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
 
-      echo "Pushing latest tag to ACR"
-      docker push $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
-    displayName: 'Build and Push OCI Image'
-    env:
-      ACR_LOGIN_SERVER: $(ACR_LOGIN_SERVER)
-      IMAGE_NAME: $(IMAGE_NAME)
-      BUILDER: $(BUILDER)
+          echo "Pushing latest tag..."
+          docker push $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
+        displayName: 'Build and Push OCI Image'
+        env:
+          ACR_LOGIN_SERVER: $(ACR_LOGIN_SERVER)
+          IMAGE_NAME: $(IMAGE_NAME)
+          BUILDER: $(BUILDER)
