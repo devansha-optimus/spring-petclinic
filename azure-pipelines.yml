@@ -14,7 +14,7 @@ variables:
   AZURE_SERVICE_CONNECTION: 'RG-Devansh-POC-0041'
 
 pool:
-  vmImage: ubuntu-latest
+  vmImage: 'ubuntu-latest'
 
 steps:
   - checkout: none   # No need to checkout repo code in this pipeline
