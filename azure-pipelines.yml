@@ -26,9 +26,9 @@ jobs:
       - task: DownloadPipelineArtifact@2
         displayName: 'Download WAR Artifact'
         inputs:
-          build: $[ resources.pipeline.buildWarPipeline ]
-          artifact: 'springboot-war'
+          artifact: 'springboot-war'  # Must match exactly
           path: '$(Pipeline.Workspace)/war-artifact'
+
 
       - script: |
           echo "Installing pack CLI..."
