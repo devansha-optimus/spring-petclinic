@@ -24,10 +24,11 @@ jobs:
   steps:
 
     - task: DownloadPipelineArtifact@2
-      displayName: 'Download WAR Artifact'
       inputs:
-        source: buildWarPipeline        # References the resource pipeline above
-        artifact: springboot-war        # Must match the name used in PublishBuildArtifacts
+        buildType: 'specific'
+        project: 'AGF-POC'                 # <-- Replace with your actual Azure DevOps project name
+        pipeline: 'buildWarPipeline'                 # <-- Alias defined in resources.pipelines
+        artifact: 'springboot-war'                   # <-- Must match exactly with artifactName in WAR pipeline
         path: '$(Pipeline.Workspace)/war-artifact'
 
     - script: |
