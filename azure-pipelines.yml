@@ -3,7 +3,7 @@ trigger: none  # Triggered via pipeline resource, not code push
 resources:
   pipelines:
     - pipeline: buildWarPipeline
-      source: devansha-optimus.spring-petclinic
+      source: devansha-optimus.spring-petclinic-buildwar
       trigger: true        # Auto-trigger when WAR pipeline completes
       branch: main
 
