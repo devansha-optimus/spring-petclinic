@@ -10,11 +10,11 @@ variables:
   MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository
 
 steps:
-- task: UseJava@1
+- task: JavaToolInstaller@0
   inputs:
     versionSpec: '11'
     jdkArchitecture: 'x64'
-    distribution: 'Temurin'
+    jdkSourceOption: 'PreInstalled'
 
 - task: Cache@2
   inputs:
