@@ -21,7 +21,7 @@ steps:
 
   - task: DownloadPipelineArtifact@2
     inputs:
-      project: 'devansha-optimus'                     # <-- Your actual Azure DevOps project name
+      project: 'AGF-POC'                     # <-- Your actual Azure DevOps project name
       buildType: 'specific'
       pipeline: $(resources.pipeline.warBuildPipeline.pipelineId)
       buildVersionToDownload: 'specific'
