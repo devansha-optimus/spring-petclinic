@@ -8,6 +8,7 @@ pool:
 
 variables:
   MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository
+  APP_NAME: my-service
 
 steps:
 - task: JavaToolInstaller@0
@@ -23,12 +24,28 @@ steps:
       maven | "$(Agent.OS)"
     path: $(MAVEN_CACHE_FOLDER)
 
+# Build the WAR and extract the version
 - script: |
+    echo "Building WAR..."
     mvn -B -Dmaven.repo.local=$(MAVEN_CACHE_FOLDER) clean package -DskipTests
-  displayName: 'Build WAR with Maven (Skip Tests)'
+
+    echo "Extracting version from pom.xml..."
+    VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+    echo "Version: $VERSION"
+
+    WAR_SOURCE=$(find target -name "*.war" | head -n 1)
+    echo "Found WAR: $WAR_SOURCE"
+
+    WAR_TARGET="target/$(APP_NAME)-$VERSION.war"
+    echo "Renaming WAR to: $WAR_TARGET"
+    mv "$WAR_SOURCE" "$WAR_TARGET"
+
+    echo "##vso[task.setvariable variable=WAR_NAME]$(APP_NAME)-$VERSION.war"
+  displayName: 'Build and rename WAR'
 
 - task: PublishBuildArtifacts@1
   inputs:
     pathToPublish: 'target'
     artifactName: 'springboot-war'
     publishLocation: 'Container'
+  displayName: 'Publish WAR Artifact'
