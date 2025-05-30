@@ -19,8 +19,8 @@ pool:
   vmImage: ubuntu-latest
 
 jobs:
-- job: BuildAndPushImage
-  displayName: 'Build and Push OCI Image'
+- job: BuildScanPushImage
+  displayName: 'Build, Scan and Push OCI Image'
   steps:
 
     - download: buildWarPipeline
@@ -59,15 +59,14 @@ jobs:
       displayName: 'Locate WAR and extract version'
 
     - script: |
-        echo "Building OCI image using Paketo Buildpacks..."
+        echo "Building OCI image locally using Paketo Buildpacks..."
         echo "Using WAR file: $(WAR_FILE)"
-        echo "Using tag version: $(VERSION)"
+        echo "Tag: $(IMAGE_NAME):$(VERSION)"
         
-        pack build $(ACR_LOGIN_SERVER)/$(IMAGE_NAME):$(VERSION) \
+        pack build $(IMAGE_NAME):$(VERSION) \
           --path $(WAR_FILE) \
-          --builder $(BUILDER) \
-          --publish
-      displayName: 'Build and push OCI image with extracted version'
+          --builder $(BUILDER)
+      displayName: 'Build OCI image (local only)'
 
     - script: |
         echo "Installing Trivy..."
@@ -80,10 +79,13 @@ jobs:
       displayName: 'Install Trivy'
 
     - script: |
-        echo "Scanning image for vulnerabilities with Trivy..."
-        IMAGE_TAG=$(VERSION)
-        IMAGE_URI=$(ACR_LOGIN_SERVER)/$(IMAGE_NAME):$IMAGE_TAG
-        echo "Scanning image: $IMAGE_URI"
+        echo "Scanning local image with Trivy..."
+        IMAGE=$(IMAGE_NAME):$(VERSION)
+        trivy image --severity HIGH,CRITICAL --exit-code 1 --no-progress $IMAGE
+      displayName: 'Scan image locally with Trivy'
 
-        trivy image --severity HIGH,CRITICAL --exit-code 1 --no-progress $IMAGE_URI
-      displayName: 'Scan OCI image with Trivy'
+    - script: |
+        echo "Tagging and pushing image to ACR..."
+        docker tag $(IMAGE_NAME):$(VERSION) $(ACR_LOGIN_SERVER)/$(IMAGE_NAME):$(VERSION)
+        docker push $(ACR_LOGIN_SERVER)/$(IMAGE_NAME):$(VERSION)
+      displayName: 'Push image to ACR'
