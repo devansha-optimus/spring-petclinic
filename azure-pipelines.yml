@@ -51,7 +51,6 @@ jobs:
 
         echo "Extracting version from WAR file name..."
         FILENAME=$(basename "$WAR_FILE")
-        # Assuming format: my-service-2.5.war
         VERSION=$(echo "$FILENAME" | sed -E 's/.*-([0-9]+\.[0-9]+)\.war/\1/')
         echo "Extracted version: $VERSION"
 
@@ -64,8 +63,27 @@ jobs:
         echo "Using WAR file: $(WAR_FILE)"
         echo "Using tag version: $(VERSION)"
         
-        pack build $ACR_LOGIN_SERVER/$IMAGE_NAME:$(VERSION) \
+        pack build $(ACR_LOGIN_SERVER)/$(IMAGE_NAME):$(VERSION) \
           --path $(WAR_FILE) \
-          --builder $BUILDER \
+          --builder $(BUILDER) \
           --publish
       displayName: 'Build and push OCI image with extracted version'
+
+    - script: |
+        echo "Installing Trivy..."
+        sudo apt-get update
+        sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install -y trivy
+      displayName: 'Install Trivy'
+
+    - script: |
+        echo "Scanning image for vulnerabilities with Trivy..."
+        IMAGE_TAG=$(VERSION)
+        IMAGE_URI=$(ACR_LOGIN_SERVER)/$(IMAGE_NAME):$IMAGE_TAG
+        echo "Scanning image: $IMAGE_URI"
+
+        trivy image --severity HIGH,CRITICAL --exit-code 1 --no-progress $IMAGE_URI
+      displayName: 'Scan OCI image with Trivy'
