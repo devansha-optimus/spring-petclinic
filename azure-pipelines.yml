@@ -88,12 +88,6 @@ jobs:
         exitCode: '0'
         ignoreUnfixed: true
 
-    - script: |
-        echo "Renaming scan outputs..."
-        mv trivy-report.txt trivy-report.table.txt
-        mv trivy-report.sarif trivy-report.sarif.json
-      displayName: 'Rename Trivy Report Files'
-
     - task: PublishBuildArtifacts@1
       displayName: 'Publish Trivy Reports'
       inputs:
