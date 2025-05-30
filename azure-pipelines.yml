@@ -1,11 +1,11 @@
 name: 'oci-image-builder'
 
-trigger: none  # Triggered by pipeline completion below
+trigger: none
 
 resources:
   pipelines:
     - pipeline: buildWarPipeline
-      source: devansha-optimus.spring-petclinic-buildwar  # Replace with your WAR pipeline name
+      source: devansha-optimus.spring-petclinic-buildwar
       trigger: true
 
 variables:
@@ -58,24 +58,37 @@ jobs:
           --pull-policy if-not-present
       displayName: 'Build image locally and extract version'
 
+    # JSON Report
     - task: Trivy@1
-      displayName: 'Scan OCI image with Trivy and export reports'
+      displayName: 'Scan OCI Image - JSON'
       inputs:
         image: '$(ACR_LOGIN_SERVER)/$(IMAGE_NAME):$(IMAGE_VERSION)'
         format: 'json'
         output: 'trivy-report.json'
         severity: 'CRITICAL,HIGH'
-        # exitCode: '1'
+        exitCode: '0'
         ignoreUnfixed: true
 
+    # Table (text file for artifact)
     - task: Trivy@1
-      displayName: 'Generate SARIF report'
+      displayName: 'Scan OCI Image - Table'
+      inputs:
+        image: '$(ACR_LOGIN_SERVER)/$(IMAGE_NAME):$(IMAGE_VERSION)'
+        format: 'table'
+        output: 'trivy-report.txt'
+        severity: 'CRITICAL,HIGH'
+        exitCode: '0'
+        ignoreUnfixed: true
+
+    # SARIF for code scanning
+    - task: Trivy@1
+      displayName: 'Scan OCI Image - SARIF'
       inputs:
         image: '$(ACR_LOGIN_SERVER)/$(IMAGE_NAME):$(IMAGE_VERSION)'
         format: 'sarif'
         output: 'trivy-report.sarif'
         severity: 'CRITICAL,HIGH'
-        exitCode: '0'  # Do not fail here; fail only on JSON scan above
+        exitCode: '0'
         ignoreUnfixed: true
 
     - task: PublishBuildArtifacts@1
@@ -84,6 +97,7 @@ jobs:
         pathToPublish: '$(System.DefaultWorkingDirectory)'
         artifactName: 'trivy-reports'
         publishLocation: 'Container'
+
     - task: AzureCLI@2
       displayName: 'Push image to ACR'
       inputs:
