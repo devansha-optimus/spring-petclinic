@@ -5,8 +5,8 @@ trigger: none  # Prevent manual/automatic trigger from commits
 resources:
   pipelines:
     - pipeline: buildWarPipeline
-      source: devansha-optimus.spring-petclinic-buildwar  # Name of the WAR pipeline
-      trigger: true                              # Automatically trigger when that pipeline completes
+      source: devansha-optimus.spring-petclinic-buildwar
+      trigger: true
 
 variables:
   ACR_NAME: azurespringapp
@@ -33,7 +33,6 @@ jobs:
         sudo mv pack /usr/local/bin/
       displayName: 'Install pack CLI'
 
-
     - task: AzureCLI@2
       displayName: 'Login to ACR'
       inputs:
@@ -50,8 +49,23 @@ jobs:
         WAR_FILE=$(find $(Pipeline.Workspace)/buildWarPipeline/springboot-war -name "*.war" | head -n 1)
         echo "WAR file located: $WAR_FILE"
 
+        echo "Extracting version from WAR file name..."
+        FILENAME=$(basename "$WAR_FILE")
+        # Assuming format: my-service-2.5.war
+        VERSION=$(echo "$FILENAME" | sed -E 's/.*-([0-9]+\.[0-9]+)\.war/\1/')
+        echo "Extracted version: $VERSION"
+
+        echo "##vso[task.setvariable variable=WAR_FILE]$WAR_FILE"
+        echo "##vso[task.setvariable variable=VERSION]$VERSION"
+      displayName: 'Locate WAR and extract version'
+
+    - script: |
         echo "Building OCI image using Paketo Buildpacks..."
-        pack build $ACR_LOGIN_SERVER/$IMAGE_NAME:$(Build.BuildId) \
-          --path $WAR_FILE \
+        echo "Using WAR file: $(WAR_FILE)"
+        echo "Using tag version: $(VERSION)"
+        
+        pack build $ACR_LOGIN_SERVER/$IMAGE_NAME:$(VERSION) \
+          --path $(WAR_FILE) \
           --builder $BUILDER \
           --publish
+      displayName: 'Build and push OCI image with extracted version'
