@@ -1,6 +1,6 @@
 name: 'oci-image-builder'
 
-trigger: none
+trigger: none  # Triggered by pipeline completion below
 
 resources:
   pipelines:
@@ -51,27 +51,25 @@ jobs:
         echo "Extracted version: $VERSION"
         echo "##vso[task.setvariable variable=IMAGE_VERSION]$VERSION"
 
-        echo "Building OCI image locally using Paketo Buildpacks..."
+        echo "Building OCI image using Paketo Buildpacks..."
         pack build $ACR_LOGIN_SERVER/$IMAGE_NAME:$VERSION \
-          --path $WAR_FILE \
+          --path "$WAR_FILE" \
           --builder $BUILDER \
           --pull-policy if-not-present
-      displayName: 'Build image locally and extract version'
+      displayName: 'Build image and extract version'
 
-    # JSON Report
     - task: Trivy@1
-      displayName: 'Scan OCI Image - JSON'
+      displayName: 'Trivy Scan - JSON'
       inputs:
         image: '$(ACR_LOGIN_SERVER)/$(IMAGE_NAME):$(IMAGE_VERSION)'
         format: 'json'
         output: 'trivy-report.json'
         severity: 'CRITICAL,HIGH'
-        exitCode: '0'
+        exitCode: '0'  # Fail pipeline on CRITICAL/HIGH
         ignoreUnfixed: true
 
-    # Table (text file for artifact)
     - task: Trivy@1
-      displayName: 'Scan OCI Image - Table'
+      displayName: 'Trivy Scan - Table'
       inputs:
         image: '$(ACR_LOGIN_SERVER)/$(IMAGE_NAME):$(IMAGE_VERSION)'
         format: 'table'
@@ -80,9 +78,8 @@ jobs:
         exitCode: '0'
         ignoreUnfixed: true
 
-    # SARIF for code scanning
     - task: Trivy@1
-      displayName: 'Scan OCI Image - SARIF'
+      displayName: 'Trivy Scan - SARIF'
       inputs:
         image: '$(ACR_LOGIN_SERVER)/$(IMAGE_NAME):$(IMAGE_VERSION)'
         format: 'sarif'
@@ -90,6 +87,12 @@ jobs:
         severity: 'CRITICAL,HIGH'
         exitCode: '0'
         ignoreUnfixed: true
+
+    - script: |
+        echo "Renaming scan outputs..."
+        mv trivy-report.txt trivy-report.table.txt
+        mv trivy-report.sarif trivy-report.sarif.json
+      displayName: 'Rename Trivy Report Files'
 
     - task: PublishBuildArtifacts@1
       displayName: 'Publish Trivy Reports'
@@ -99,7 +102,7 @@ jobs:
         publishLocation: 'Container'
 
     - task: AzureCLI@2
-      displayName: 'Push image to ACR'
+      displayName: 'Push Image to ACR'
       inputs:
         azureSubscription: $(AZURE_SERVICE_CONNECTION)
         scriptType: bash
