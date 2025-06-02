@@ -1,6 +1,7 @@
-# database init, supports mysql too
-database: h2
 spring:
+  config:
+    import: optional:file:./config/shared-config.yml
+
   sql:
     init:
       schema-locations: classpath*:db/${database}/schema.sql
@@ -26,18 +27,7 @@ spring:
   application:
     name: azure-springapp2
 
-  boot:
-    admin:
-      client:
-        url: https://springapp-admin-azure-java.ext.calmwave-25ab1c98.canadacentral.azurecontainerapps.io
-        instance:
-          prefer-ip: true
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: "*"
+database: h2
 
 logging:
   level:
@@ -48,15 +38,3 @@ logging:
 
 server:
   port: 8080
-
-eureka:
-  client:
-    service-url:
-      defaultZone: https://serviceregistry-azure-java.ext.calmwave-25ab1c98.canadacentral.azurecontainerapps.io
-    register-with-eureka: true
-    fetch-registry: true
-    tls:
-      enabled: false
-  instance:
-    prefer-ip-address: true
-    hostname: azure-springapp-env.canadacentral.azurecontainerapps.io
