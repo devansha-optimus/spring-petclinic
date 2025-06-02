@@ -1,11 +1,11 @@
-name: 'oci-image-builder'
+name: oci-image-builder
 
-trigger: none  # Triggered by pipeline completion below
+trigger: none  # Triggered by pipeline resource
 
 resources:
   pipelines:
     - pipeline: buildWarPipeline
-      source: devansha-optimus.spring-petclinic-buildwar
+      source: devansha-optimus.spring-petclinic-buildwar   # Use actual pipeline name here
       trigger: true
 
 variables:
@@ -14,6 +14,7 @@ variables:
   IMAGE_NAME: $(var-imgName)
   BUILDER: azurespringapp.azurecr.io/azure-spring-builder:latest
   AZURE_SERVICE_CONNECTION: 'RG-Devansh-POC-0041'
+  APP_NAME: my-service
 
 pool:
   vmImage: ubuntu-latest
@@ -43,11 +44,17 @@ jobs:
           az acr login --name $ACR_NAME
 
     - script: |
-        echo "Finding WAR file..."
+        echo "Finding WAR file in downloaded artifact..."
         WAR_FILE=$(find $(Pipeline.Workspace)/buildWarPipeline/springboot-war -name "*.war" | head -n 1)
         echo "WAR file located: $WAR_FILE"
 
-        VERSION=$(basename "$WAR_FILE" | sed -E 's/^.*-([0-9]+\.[0-9]+)\.war$/\1/')
+        BASENAME=$(basename "$WAR_FILE")
+        echo "WAR file basename: $BASENAME"
+
+        # Extract version from WAR filename assuming format: <app-name>-<version>.war
+        APP_NAME="$(APP_NAME)"
+        VERSION="${BASENAME#${APP_NAME}-}"
+        VERSION="${VERSION%.war}"
         echo "Extracted version: $VERSION"
         echo "##vso[task.setvariable variable=IMAGE_VERSION]$VERSION"
 
@@ -65,7 +72,7 @@ jobs:
         format: 'json'
         output: 'trivy-report.json'
         severity: 'CRITICAL,HIGH'
-        exitCode: '0'  # Fail pipeline on CRITICAL/HIGH
+        exitCode: '0'
         ignoreUnfixed: true
 
     - task: Trivy@1
