@@ -1,0 +1,62 @@
+# database init, supports mysql too
+database: h2
+spring:
+  sql:
+    init:
+      schema-locations: classpath*:db/${database}/schema.sql
+      data-locations: classpath*:db/${database}/data.sql
+
+  thymeleaf:
+    mode: HTML
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+
+  messages:
+    basename: messages/messages
+
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          max-age: 12h
+
+  application:
+    name: azure-springapp2
+
+  boot:
+    admin:
+      client:
+        url: https://springapp-admin-azure-java.ext.calmwave-25ab1c98.canadacentral.azurecontainerapps.io
+        instance:
+          prefer-ip: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
+logging:
+  level:
+    org:
+      springframework: INFO
+      # springframework.web: DEBUG
+      # springframework.context.annotation: TRACE
+
+server:
+  port: 8080
+
+eureka:
+  client:
+    service-url:
+      defaultZone: https://serviceregistry-azure-java.ext.calmwave-25ab1c98.canadacentral.azurecontainerapps.io
+    register-with-eureka: true
+    fetch-registry: true
+    tls:
+      enabled: false
+  instance:
+    prefer-ip-address: true
+    hostname: azure-springapp-env.canadacentral.azurecontainerapps.io
