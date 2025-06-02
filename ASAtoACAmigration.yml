@@ -1,3 +1,5 @@
+name: build-war-pipeline
+
 trigger:
   branches:
     include:
@@ -24,7 +26,6 @@ steps:
       maven | "$(Agent.OS)"
     path: $(MAVEN_CACHE_FOLDER)
 
-# Build the WAR and extract the version
 - script: |
     echo "Building WAR..."
     mvn -B -Dmaven.repo.local=$(MAVEN_CACHE_FOLDER) clean package -DskipTests
