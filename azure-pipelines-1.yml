@@ -36,8 +36,8 @@ stages:
       displayName: 'Push Builder Image to ACR'
       inputs:
         containerregistrytype: 'Azure Container Registry'
-        azureSubscription: 'acadevportal'
-        azureContainerRegistry: '{"loginServer":"agfwebaca1devtestcacacr-fwdqgcbeb0ghbwa5.azurecr.io", "id" : "/subscriptions/f77881c9-21ce-45db-ab80-f0691c3abab9/resourceGroups/agfweb_aca1_devtest_cac-rg/providers/Microsoft.ContainerRegistry/registries/agfwebaca1devtestcacacr"}'
+        azureSubscription: 'RG-Devansh-POC-0041'
+        azureContainerRegistry: '{"loginServer":"azurespringapp.azurecr.io", "id" : "/subscriptions/99cb61e0-6f5e-453f-9bf6-bc478df73d4b/resourceGroups/RG-Devansh-POC/providers/Microsoft.ContainerRegistry/registries/azurespringapp"}'
         action: 'Push an image'
         imageName: '$(ACR_LOGIN_SERVER)/$(BUILDER_NAME)'
         includeLatestTag: true
