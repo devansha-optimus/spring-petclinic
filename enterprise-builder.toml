@@ -1,0 +1,20 @@
+# filename: enterprise-builder.tomll
+
+[[buildpacks]]
+uri = "docker://docker.io/paketobuildpacks/java:latest"
+id = "paketo-buildpacks/java"
+
+
+
+[[order]]
+[[order.group]]
+id = "paketo-buildpacks/java"
+
+
+
+[build]
+image = "paketobuildpacks/build-jammy-base:latest"
+
+[run]
+[[run.images]]
+image = "paketobuildpacks/run-jammy-base:latest"
