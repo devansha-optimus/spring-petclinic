@@ -8,7 +8,7 @@ variables:
   BUILDER_IMAGE: $(ACR_LOGIN_SERVER)/$(BUILDER_NAME):latest
 
 pool:
-  vmImage: ubuntu-latest
+  name: newagc
 
 stages:
 - stage: BuildAndPushBuilder
